@@ -372,7 +372,6 @@ function cleanupAndLeave() {
     inactivityTimeoutId = null;
   }
   
-  // Garantizar desconexión física destruyendo la conexión global
   if (voiceConnection) {
     try {
       voiceConnection.destroy();
@@ -532,12 +531,13 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     console.log(`Obteniendo flujo de audio directo de YouTube...`);
     const directAudioUrl = await getDirectAudioUrl(url);
 
-    console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds}...`);
+    console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds} (PCM Crudo)...`);
     
+    // Transmitir en formato PCM crudo de 16 bits estéreo a 48kHz
     activeFfmpegProcess = spawn(ffmpegPath, [
       '-ss', seekSeconds.toString(),
       '-i', directAudioUrl,
-      '-f', 'opus',
+      '-f', 's16le',
       '-ar', '48000',
       '-ac', '2',
       'pipe:1'
@@ -546,7 +546,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     });
 
     const resource = createAudioResource(activeFfmpegProcess.stdout, {
-      inputType: StreamType.OggOpus
+      inputType: StreamType.Raw
     });
     
     audioPlayer.play(resource);
