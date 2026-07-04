@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import path from 'url';
+import path from 'path';
 import fs from 'fs';
 import https from 'https';
 import os from 'os';
@@ -291,7 +291,6 @@ app.get('/api/state', (req, res) => {
     );
   }
   
-  // Agregar metadata dinámica del bot a la web
   currentPlaybackState.guildCount = client.guilds.cache.size;
   currentPlaybackState.voiceConnected = voiceConnection !== null;
   res.json(currentPlaybackState);
@@ -445,7 +444,7 @@ app.post('/api/play-track', async (req, res) => {
   }
 });
 
-// Enviar mensajes al canal con menciones de usuarios y roles activadas
+// Enviar mensajes al canal con parseo automático de menciones por texto (@NombreUsuario)
 app.post('/api/message', async (req, res) => {
   const { message, channelId } = req.body;
   if (!message) return res.status(400).json({ error: 'Mensaje vacío.' });
@@ -458,9 +457,35 @@ app.post('/api/message', async (req, res) => {
   try {
     const channel = await client.channels.fetch(targetChannelId);
     if (channel) {
-      // Permitimos mencionar usuarios, roles y pings generales
+      let parsedMessage = message;
+
+      // Buscar nombres y nicknames escritos como @NombreUsuario para convertirlos en mención real de Discord
+      if (channel.guild) {
+        try {
+          const members = await channel.guild.members.fetch();
+          const mentionRegex = /@([a-zA-Z0-9_\-\.]+)/g;
+          const matches = [...parsedMessage.matchAll(mentionRegex)];
+          
+          for (const m of matches) {
+            const fullMatch = m[0]; // e.g. "@UsuarioX"
+            const username = m[1].toLowerCase();
+            
+            const member = members.find(mbr => 
+              mbr.user.username.toLowerCase() === username || 
+              (mbr.nickname && mbr.nickname.toLowerCase() === username)
+            );
+            
+            if (member) {
+              parsedMessage = parsedMessage.replace(fullMatch, `<@${member.id}>`);
+            }
+          }
+        } catch (err) {
+          console.error('Error al resolver menciones por texto:', err);
+        }
+      }
+
       await channel.send({
-        content: `**Panel**: ${message}`,
+        content: `**Panel**: ${parsedMessage}`,
         allowedMentions: { parse: ['users', 'roles', 'everyone'] }
       });
       lastTextChannel = channel;
@@ -560,7 +585,9 @@ app.get('/api/channels/:id/messages', async (req, res) => {
       id: msg.id,
       author: msg.author.username,
       content: msg.content,
-      timestamp: msg.createdAt
+      timestamp: msg.createdAt,
+      // Si el autor es el propio bot, marcamos isMe en verdadero
+      isMe: msg.author.id === client.user.id
     })).reverse();
     res.json(formatted);
   } catch (e) {
