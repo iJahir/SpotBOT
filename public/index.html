@@ -567,7 +567,7 @@
       object-fit: cover;
     }
 
-    /* DISCORD CHAT DE CORTE PREMIUM */
+    /* DISCORD CHAT */
     .discord-chat-layout {
       width: 100%;
       display: flex;
@@ -634,7 +634,7 @@
       word-break: break-word;
     }
 
-    /* CONSOLA DE REGISTROS (LOGS) */
+    /* CONSOLA */
     .terminal-container {
       width: 100%;
       text-align: left;
@@ -907,7 +907,7 @@
         const data = await res.json();
 
         // Barra de estado global
-        document.getElementById('statusServers').innerText = `Servidores: ${data.guildCount || 0}`;
+        document.getElementById('statusServers').innerText = `Servidores: ${data.guildCount}`;
         const voicePill = document.getElementById('statusVoice');
         if (data.voiceConnected) {
           voicePill.innerText = 'Voz: Conectado';
@@ -1133,7 +1133,7 @@
     }
 
     // -----------------------------------------------------------
-    // CHAT DISCORD CON BURBUJAS MODERNAS
+    // CHAT DISCORD CON BURBUJAS Y SELECTOR AGRUPADO
     // -----------------------------------------------------------
     async function loadChannels() {
       try {
@@ -1141,12 +1141,27 @@
         const channels = await res.json();
         const select = document.getElementById('channelSelect');
         select.innerHTML = '<option value="">-- Elige un canal de texto --</option>';
+        
+        // Agrupar canales por servidor (Guild)
+        const guilds = {};
         channels.forEach(ch => {
-          const opt = document.createElement('option');
-          opt.value = ch.id;
-          opt.innerText = `#${ch.name} (${ch.guildName})`;
-          select.appendChild(opt);
+          if (!guilds[ch.guildName]) {
+            guilds[ch.guildName] = [];
+          }
+          guilds[ch.guildName].push(ch);
         });
+
+        for (const guildName in guilds) {
+          const group = document.createElement('optgroup');
+          group.label = guildName;
+          guilds[guildName].forEach(ch => {
+            const opt = document.createElement('option');
+            opt.value = ch.id;
+            opt.innerText = `#${ch.name}`;
+            group.appendChild(opt);
+          });
+          select.appendChild(group);
+        }
 
         if (currentChannelId) {
           select.value = currentChannelId;
@@ -1184,8 +1199,8 @@
 
         viewer.innerHTML = '';
         messages.forEach(msg => {
-          const isPanel = msg.content.startsWith('**Panel**:');
-          const cleanContent = isPanel ? msg.content.replace('**Panel**:', '').trim() : msg.content;
+          const isPanel = msg.isMe || msg.content.startsWith('**Panel**:');
+          const cleanContent = msg.content.replace(/^\*\*Panel\*\*:\s*/, '');
           
           const bubble = document.createElement('div');
           bubble.className = `chat-bubble ${isPanel ? 'panel-msg' : ''}`;
@@ -1226,7 +1241,7 @@
     }
 
     // -----------------------------------------------------------
-    // TERMINAL Y LOGS DE ERRORES CATEGORIZADOS
+    // TERMINAL Y LOGS
     // -----------------------------------------------------------
     async function loadLogs() {
       if (activeTab !== 'consola') return;
