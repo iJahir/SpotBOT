@@ -32,6 +32,7 @@
       align-items: center;
       overflow-x: hidden;
       position: relative;
+      padding: 40px 0;
     }
 
     /* Soft glowing background decorative blobs */
@@ -40,7 +41,7 @@
       width: 400px;
       height: 400px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(29, 185, 84, 0.25) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(29, 185, 84, 0.2) 0%, transparent 70%);
       z-index: 1;
       filter: blur(50px);
       animation: float 20s ease-in-out infinite alternate;
@@ -74,7 +75,6 @@
       flex-direction: column;
       align-items: center;
       text-align: center;
-      transition: transform 0.3s ease;
     }
 
     header h1 {
@@ -95,11 +95,11 @@
     /* Cover Album Artwork */
     .album-art-container {
       position: relative;
-      width: 220px;
-      height: 220px;
+      width: 200px;
+      height: 200px;
       border-radius: 18px;
       overflow: hidden;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       border: 1px solid rgba(255,255,255,0.1);
     }
@@ -135,7 +135,7 @@
     .song-artist {
       font-size: 0.95rem;
       color: var(--text-muted);
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -145,7 +145,7 @@
     /* Custom Progress Bar */
     .progress-container {
       width: 100%;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .progress-bar-bg {
@@ -179,7 +179,7 @@
       align-items: center;
       justify-content: center;
       gap: 28px;
-      margin-bottom: 28px;
+      margin-bottom: 24px;
     }
 
     .btn-ctrl {
@@ -203,8 +203,8 @@
     }
 
     .btn-play-pause {
-      width: 64px;
-      height: 64px;
+      width: 56px;
+      height: 56px;
       background: var(--text);
       color: #0f0f1a;
       border-radius: 50%;
@@ -218,21 +218,21 @@
     }
 
     .btn-play-pause svg {
-      width: 28px;
-      height: 28px;
+      width: 24px;
+      height: 24px;
       fill: currentColor;
     }
 
     .btn-seek-side svg {
-      width: 32px;
-      height: 32px;
+      width: 28px;
+      height: 28px;
       fill: currentColor;
     }
 
     /* Speed Controls */
     .control-row {
       width: 100%;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       text-align: left;
     }
 
@@ -242,7 +242,7 @@
       text-transform: uppercase;
       letter-spacing: 1px;
       color: var(--text-muted);
-      margin-bottom: 10px;
+      margin-bottom: 8px;
       display: block;
     }
 
@@ -282,9 +282,9 @@
       width: 100%;
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--glass-border);
-      padding: 12px 16px;
+      padding: 10px 14px;
       border-radius: 16px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     .volume-container svg {
@@ -309,22 +309,16 @@
       height: 16px;
       border-radius: 50%;
       background: var(--primary);
-      box-shadow: 0 0 6px rgba(29, 185, 84, 0.5);
-      transition: transform 0.1s ease;
     }
 
-    .volume-slider::-webkit-slider-thumb:hover {
-      transform: scale(1.2);
-    }
-
-    /* Discord Chat box integration */
+    /* Discord Chat box */
     .chat-container {
       width: 100%;
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--glass-border);
-      padding: 16px;
-      border-radius: 20px;
-      text-align: left;
+      padding: 12px;
+      border-radius: 16px;
+      margin-bottom: 20px;
     }
 
     .chat-input-wrapper {
@@ -337,15 +331,10 @@
       background: rgba(0,0,0,0.2);
       border: 1px solid var(--glass-border);
       border-radius: 10px;
-      padding: 10px 12px;
+      padding: 8px 12px;
       color: #fff;
       font-size: 0.85rem;
       outline: none;
-      transition: border-color 0.2s ease;
-    }
-
-    .chat-input:focus {
-      border-color: var(--primary);
     }
 
     .btn-send {
@@ -357,14 +346,120 @@
       cursor: pointer;
       font-weight: 600;
       font-size: 0.85rem;
-      transition: opacity 0.2s ease;
     }
 
-    .btn-send:hover {
-      opacity: 0.9;
+    /* BUSCADOR DE MÚSICA */
+    .search-container {
+      width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      padding: 14px;
+      border-radius: 18px;
+      margin-bottom: 20px;
     }
 
-    /* Success message popups */
+    .search-results {
+      margin-top: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .search-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(255,255,255,0.04);
+      padding: 8px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      text-align: left;
+    }
+
+    .search-item img {
+      width: 40px;
+      height: 40px;
+      border-radius: 6px;
+      object-fit: cover;
+    }
+
+    .search-item-info {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .search-item-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .search-item-artist {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .btn-add-queue {
+      background: rgba(29, 185, 84, 0.2);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, color 0.2s;
+    }
+
+    .btn-add-queue:hover {
+      background: var(--primary);
+      color: white;
+    }
+
+    /* LISTA DE COLA */
+    .queue-container {
+      width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      padding: 14px;
+      border-radius: 18px;
+      text-align: left;
+    }
+
+    .queue-list {
+      margin-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .queue-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+    }
+
+    .queue-item:last-child {
+      border-bottom: none;
+    }
+
+    .queue-item img {
+      width: 32px;
+      height: 32px;
+      border-radius: 4px;
+      object-fit: cover;
+    }
+
+    /* Toast */
     .toast {
       position: fixed;
       bottom: 20px;
@@ -378,7 +473,6 @@
       transform: translateY(20px);
       transition: opacity 0.3s ease, transform 0.3s ease;
       z-index: 10;
-      box-shadow: 0 4px 15px rgba(29,185,84,0.3);
     }
 
     .toast.show {
@@ -399,7 +493,7 @@
 
       <!-- Portada -->
       <div class="album-art-container">
-        <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500" alt="Portada de canción" class="album-art" id="albumArt">
+        <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500" alt="Portada" class="album-art" id="albumArt">
       </div>
 
       <!-- Detalle de canción -->
@@ -419,23 +513,20 @@
 
       <!-- Controles multimedia -->
       <div class="media-controls">
-        <!-- Retroceder 30s -->
         <button class="btn-ctrl btn-seek-side" onclick="seek(-30)" title="Retroceder 30s">
           <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.63 7.82h-.99v2.24H8.36v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
         </button>
 
-        <!-- Play / Pause -->
         <button class="btn-ctrl btn-play-pause" onclick="togglePlayPause()" id="btnPlayPause">
           <svg viewBox="0 0 24 24" id="svgPlayPause"><path d="M8 5v14l11-7z"/></svg>
         </button>
 
-        <!-- Adelantar 30s -->
         <button class="btn-ctrl btn-seek-side" onclick="seek(30)" title="Adelantar 30s">
           <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm1.63 7.82h-.99v2.24H11.72v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
         </button>
       </div>
 
-      <!-- Fila: Velocidad -->
+      <!-- Velocidad -->
       <div class="control-row">
         <span class="control-label">Velocidad</span>
         <div class="speed-btn-group">
@@ -445,7 +536,7 @@
         </div>
       </div>
 
-      <!-- Fila: Volumen -->
+      <!-- Volumen -->
       <div class="control-row">
         <span class="control-label">Volumen Bot</span>
         <div class="volume-container">
@@ -454,13 +545,35 @@
         </div>
       </div>
 
-      <!-- Fila: Enviar a Discord -->
+      <!-- Enviar a Discord -->
       <div class="control-row">
         <span class="control-label">Enviar mensaje a Discord</span>
         <div class="chat-container">
           <div class="chat-input-wrapper">
-            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe un mensaje al chat..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter') sendMessage()">
             <button class="btn-send" onclick="sendMessage()">Mandar</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BUSCADOR SPOTIFY -->
+      <div class="control-row">
+        <span class="control-label">Buscar y Añadir a la cola</span>
+        <div class="search-container">
+          <div class="chat-input-wrapper">
+            <input type="text" class="chat-input" id="searchInput" placeholder="Buscar artista o canción..." onkeydown="if(event.key==='Enter') searchMusic()">
+            <button class="btn-send" onclick="searchMusic()">Buscar</button>
+          </div>
+          <div class="search-results" id="searchResults"></div>
+        </div>
+      </div>
+
+      <!-- COLA DE REPRODUCCIÓN -->
+      <div class="control-row">
+        <span class="control-label">Siguientes en la cola</span>
+        <div class="queue-container">
+          <div class="queue-list" id="queueList">
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">No hay canciones en cola</div>
           </div>
         </div>
       </div>
@@ -468,15 +581,13 @@
     </div>
   </div>
 
-  <div class="toast" id="toast">¡Mensaje enviado a Discord!</div>
+  <div class="toast" id="toast">Operación realizada</div>
 
   <script>
     let isPlaying = false;
     let progressMs = 0;
     let durationMs = 0;
-    let timerId = null;
 
-    // Toast de notificación
     function showToast(message) {
       const toast = document.getElementById('toast');
       toast.innerText = message;
@@ -486,7 +597,6 @@
       }, 3500);
     }
 
-    // Formatear milisegundos en min:seg
     function formatTime(ms) {
       if (isNaN(ms) || ms < 0) return '0:00';
       const totalSec = Math.floor(ms / 1000);
@@ -495,42 +605,36 @@
       return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
-    // Consultar el estado del backend continuamente
+    // Actualizar datos
     async function updateState() {
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
         const data = await res.json();
 
-        // Actualizar título, artista e imagen
         document.getElementById('songTitle').innerText = data.title;
         document.getElementById('songArtist').innerText = data.artist || 'Sin artista';
         if (data.coverUrl) {
           document.getElementById('albumArt').src = data.coverUrl;
         }
 
-        // Volumen y velocidad
         document.getElementById('volumeSlider').value = data.volume;
         
-        // Activar botón de velocidad correcto
         document.querySelectorAll('.btn-speed').forEach(btn => btn.classList.remove('active'));
         if (data.speed === 1.0) document.getElementById('speed-1').classList.add('active');
         if (data.speed === 1.5) document.getElementById('speed-1_5').classList.add('active');
         if (data.speed === 2.0) document.getElementById('speed-2').classList.add('active');
 
-        // Play/Pause button styling
         isPlaying = data.isPlaying;
-        const btnPlayPause = document.getElementById('btnPlayPause');
         const svgPath = document.getElementById('svgPlayPause');
         if (isPlaying) {
           document.getElementById('albumArt').classList.add('playing');
-          svgPath.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'; // Icono Pause
+          svgPath.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>';
         } else {
           document.getElementById('albumArt').classList.remove('playing');
-          svgPath.innerHTML = '<path d="M8 5v14l11-7z"/>'; // Icono Play
+          svgPath.innerHTML = '<path d="M8 5v14l11-7z"/>';
         }
 
-        // Tiempos y barra de progreso
         progressMs = data.progressMs;
         durationMs = data.durationMs;
 
@@ -540,12 +644,90 @@
         const pct = durationMs > 0 ? (progressMs / durationMs) * 100 : 0;
         document.getElementById('progressBarFill').style.width = `${pct}%`;
 
+        // Renderizar Cola de reproducción
+        const queueContainer = document.getElementById('queueList');
+        if (data.queue && data.queue.length > 0) {
+          queueContainer.innerHTML = '';
+          data.queue.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'queue-item';
+            row.innerHTML = `
+              <img src="${item.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100'}" alt="Cover">
+              <div class="search-item-info">
+                <div class="search-item-title">${item.title}</div>
+                <div class="search-item-artist">${item.artist}</div>
+              </div>
+            `;
+            queueContainer.appendChild(row);
+          });
+        } else {
+          queueContainer.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">No hay canciones en cola</div>';
+        }
+
       } catch (e) {
         console.error('Error al actualizar el estado del dashboard:', e);
       }
     }
 
-    // Modificar volumen
+    // Buscar canciones en Spotify
+    async function searchMusic() {
+      const input = document.getElementById('searchInput');
+      const query = input.value.trim();
+      if (!query) return;
+
+      const container = document.getElementById('searchResults');
+      container.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); padding: 10px 0;">Buscando...</div>';
+
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+        const results = await res.json();
+        
+        container.innerHTML = '';
+        if (results.length === 0) {
+          container.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); padding: 10px 0;">No se encontraron resultados</div>';
+          return;
+        }
+
+        results.forEach(item => {
+          const div = document.createElement('div');
+          div.className = 'search-item';
+          div.innerHTML = `
+            <img src="${item.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100'}" alt="Art">
+            <div class="search-item-info">
+              <div class="search-item-title">${item.title}</div>
+              <div class="search-item-artist">${item.artist}</div>
+            </div>
+            <button class="btn-add-queue" onclick="addToQueue('${item.uri}', '${item.title.replace(/'/g, "\\'")}')">Añadir</button>
+          `;
+          container.appendChild(div);
+        });
+
+      } catch (e) {
+        console.error(e);
+        container.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); padding: 10px 0;">Error al buscar</div>';
+      }
+    }
+
+    // Añadir canción a la cola
+    async function addToQueue(uri, title) {
+      try {
+        const res = await fetch('/api/queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uri })
+        });
+        if (res.ok) {
+          showToast(`¡"${title}" añadida a la cola!`);
+          setTimeout(updateState, 1500); // Dar un segundo a Spotify para procesar y actualizar
+        } else {
+          showToast('Error al añadir a la cola');
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error de conexión');
+      }
+    }
+
     async function changeVolume(val) {
       try {
         await fetch('/api/volume', {
@@ -558,7 +740,6 @@
       }
     }
 
-    // Modificar velocidad
     async function setSpeed(speedVal) {
       try {
         const res = await fetch('/api/speed', {
@@ -575,7 +756,6 @@
       }
     }
 
-    // Adelantar o retroceder
     async function seek(seconds) {
       try {
         const res = await fetch('/api/seek', {
@@ -592,7 +772,6 @@
       }
     }
 
-    // Play/Pause
     async function togglePlayPause() {
       try {
         const res = await fetch('/api/play-pause', { method: 'POST' });
@@ -605,7 +784,6 @@
       }
     }
 
-    // Mandar mensaje a Discord
     async function sendMessage() {
       const input = document.getElementById('chatInput');
       const text = input.value.trim();
@@ -629,10 +807,9 @@
       }
     }
 
-    // Clic en la barra de progreso para hacer seek exacto
     document.getElementById('progressBarBg').addEventListener('click', async (e) => {
       if (durationMs <= 0) return;
-      const rect = e.target.getBoundingClientRect();
+      const rect = e.currentTarget.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const width = rect.width;
       const percentage = clickX / width;
@@ -653,11 +830,10 @@
       }
     });
 
-    // Iniciar bucles de sincronización local del UI
+    // Bucles
     updateState();
-    setInterval(updateState, 1000);
+    setInterval(updateState, 2000); // 2 segundos para no saturar
 
-    // Incrementar progreso localmente cada segundo para una barra más fluida
     setInterval(() => {
       if (isPlaying && progressMs < durationMs) {
         progressMs += 1000;

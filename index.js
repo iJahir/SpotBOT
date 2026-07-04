@@ -167,7 +167,8 @@ let currentPlaybackState = {
   durationMs: 0,
   isPlaying: false,
   volume: 50,
-  speed: 1.0
+  speed: 1.0,
+  queue: []
 };
 
 // -------------------------------------------------------------
@@ -334,19 +335,74 @@ app.post('/api/play-pause', async (req, res) => {
   }
 });
 
+// Enviar mensajes al canal sin pings ni menciones
 app.post('/api/message', async (req, res) => {
   const { message } = req.body;
   if (!message) return res.status(400).json({ error: 'Mensaje vacío.' });
 
   if (lastTextChannel) {
     try {
-      await lastTextChannel.send(`💬 **[Panel Web]**: ${message}`);
+      // allowedMentions: { parse: [] } bloquea menciones de roles, usuarios y @everyone/@here
+      await lastTextChannel.send({
+        content: `**Panel**: ${message}`,
+        allowedMentions: { parse: [] }
+      });
       return res.json({ success: true });
     } catch (e) {
       return res.status(500).json({ error: e.message });
     }
   }
   res.status(400).json({ error: 'El bot no se ha unido a ningún canal de texto aún.' });
+});
+
+// Buscador de canciones en Spotify
+app.get('/api/search', async (req, res) => {
+  const { q } = req.query;
+  const token = await getValidAccessToken();
+  if (!token) return res.status(401).json({ error: 'No autenticado en Spotify.' });
+  if (!q) return res.json([]);
+
+  try {
+    const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=track&limit=5`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const results = data.tracks.items.map(item => ({
+        id: item.id,
+        uri: item.uri,
+        title: item.name,
+        artist: item.artists.map(a => a.name).join(', '),
+        coverUrl: item.album.images[0]?.url || ''
+      }));
+      return res.json(results);
+    }
+    res.status(response.status).json({ error: 'Error al buscar en Spotify.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Añadir canción a la cola de Spotify
+app.post('/api/queue', async (req, res) => {
+  const { uri } = req.body;
+  const token = await getValidAccessToken();
+  if (!token) return res.status(401).json({ error: 'No autenticado en Spotify.' });
+  if (!uri) return res.status(400).json({ error: 'Falta la URI del track.' });
+
+  try {
+    const response = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(uri)}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.ok || response.status === 204) {
+      return res.json({ success: true });
+    }
+    const errData = await response.json().catch(() => ({}));
+    res.status(response.status).json(errData);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/terms', (req, res) => {
@@ -462,7 +518,7 @@ async function replyTemporarily(message, text) {
 client.on('ready', async () => {
   console.log(`Bot de Discord listo como: ${client.user.tag}`);
 
-  // Anuncio al regresar de cambios
+  // Anuncio al regresar de cambios (sin revelar IPs locales a Discord)
   if (fs.existsSync(stateFilePath)) {
     try {
       const state = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
@@ -475,7 +531,7 @@ client.on('ready', async () => {
 🛠️ **Sincronización robusta**: Enrutada vía \`yt-dlp.exe\` para evitar bloqueos.
 🔊 **Audio activado**: Integrado \`opusscript\` para resolver los silencios al cantar.
 ⏱️ **Inactividad**: Desconexión automática tras 2 minutos sin sonar música.
-📱 **Panel Web y Móvil**: ¡Lanzado un panel de control interactivo en \`http://${localIp}:${PORT}/\` para bajar volumen, adelantar, cambiar velocidad y mensajear!`);
+📱 **Panel Web y Móvil**: ¡Lanzado un panel de control interactivo en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración del bot para bajar volumen, buscar, añadir a la cola y mensajear!`);
         }
       }
     } catch (e) {
@@ -521,10 +577,11 @@ client.on('messageCreate', async (message) => {
         console.error('Error controlado en el reproductor de audio:', error.message);
       });
 
+      // No mostramos la IP local del usuario en Discord
       if (spotifyAccessToken) {
-        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.\nPuedes abrir el panel de control web en: http://${localIp}:${PORT}/`);
+        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.\nPuedes abrir el panel de control en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración.`);
       } else {
-        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo este enlace en tu navegador o escaneando el código QR de la consola: ${loginUrl}`);
+        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo el enlace de login generado en tu consola (http://localhost:5000/login) o escaneando el código QR.`);
       }
 
       startSyncLoop(message.guild.id);
@@ -628,6 +685,26 @@ async function syncSpotifyPlayback(guildId) {
     const coverUrl = playback.item.album.images[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500';
     const durationMs = playback.item.duration_ms;
 
+    // Obtener la cola de reproducción actual de Spotify
+    let queueList = [];
+    try {
+      const queueResponse = await fetch('https://api.spotify.com/v1/me/player/queue', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (queueResponse.ok) {
+        const queueData = await queueResponse.json();
+        if (queueData && queueData.queue) {
+          queueList = queueData.queue.slice(0, 5).map(item => ({
+            title: item.name,
+            artist: item.artists.map(a => a.name).join(', '),
+            coverUrl: item.album.images[0]?.url || ''
+          }));
+        }
+      }
+    } catch (e) {
+      console.error('Error al obtener cola de Spotify:', e);
+    }
+
     // Actualizar estado del panel web
     currentPlaybackState = {
       title: trackName,
@@ -637,7 +714,8 @@ async function syncSpotifyPlayback(guildId) {
       durationMs: durationMs,
       isPlaying: isPlayingOnSpotify,
       volume: Math.round(currentVolume * 100),
-      speed: currentSpeed
+      speed: currentSpeed,
+      queue: queueList
     };
 
     checkInactivity(guildId, isPlayingOnSpotify);
@@ -740,7 +818,6 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
       '-ac', '2'
     ];
 
-    // Aplicar filtro de velocidad de audio atempo de FFmpeg si la velocidad es diferente de x1.0
     if (currentSpeed !== 1.0) {
       ffmpegArgs.push('-af', `atempo=${currentSpeed}`);
     }
@@ -759,13 +836,11 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
       console.log(`[FFMPEG PROCESO] Salida del proceso. Codigo: ${code}, Senal: ${signal}`);
     });
 
-    // Activar volumen integrado en el recurso de audio
     currentAudioResource = createAudioResource(activeFfmpegProcess.stdout, {
       inputType: StreamType.Raw,
       inlineVolume: true
     });
     
-    // Aplicar volumen actual
     currentAudioResource.volume.setVolume(currentVolume);
     
     audioPlayer.play(currentAudioResource);
