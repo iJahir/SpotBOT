@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import path from 'path';
+import path from 'url';
 import fs from 'fs';
 import https from 'https';
 import os from 'os';
@@ -49,7 +49,7 @@ if (!DISCORD_TOKEN || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SPOTIFY_R
 }
 
 // -------------------------------------------------------------
-// SISTEMA DE LOGS Y CONSOLA EN TIEMPO REAL
+// SISTEMA DE LOGS Y CONSOLA EN TIEMPO REAL CON CÓDIGOS DE ERROR
 // -------------------------------------------------------------
 let systemLogs = [];
 
@@ -57,21 +57,24 @@ function writeToLogFile(type, message) {
   const timestamp = new Date().toLocaleTimeString();
   const logLine = `[${timestamp}] [${type}] ${message}`;
   
-  // Guardar en memoria (últimos 50 logs)
   systemLogs.push(logLine);
   if (systemLogs.length > 50) {
     systemLogs.shift();
   }
 
-  // Guardar en archivo bot.log
   try {
     fs.appendFileSync(logFilePath, logLine + '\n', 'utf8');
   } catch (err) {
-    // Si falla la escritura en archivo, ignoramos para no tirar el bot
+    // Silencioso si falla escritura
   }
 }
 
-// Interceptores globales para capturar todo a la consola de la web
+// Loguear errores estructurados
+function logSystemError(code, message, err = null) {
+  const errMsg = err ? ` | Detalle: ${err.message || err}` : '';
+  console.error(`[Código ${code}] ${message}${errMsg}`);
+}
+
 const originalConsoleLog = console.log;
 const originalConsoleError = console.error;
 
@@ -144,7 +147,7 @@ async function getDirectAudioUrl(youtubeUrl) {
     const { stdout } = await execPromise(`"${ytDlpPath}" -f bestaudio -g "${youtubeUrl}"`);
     return stdout.trim();
   } catch (error) {
-    console.error('Error al obtener URL directa con yt-dlp:', error);
+    logSystemError('ERR-01', 'Fallo al extraer stream de YouTube con yt-dlp.exe', error);
     throw error;
   }
 }
@@ -178,10 +181,10 @@ async function refreshSpotifyToken() {
       tokenExpirationTime = Date.now() + data.expires_in * 1000;
       console.log('Token de acceso de Spotify renovado con éxito.');
     } else {
-      console.error('Error al renovar el token de Spotify:', data);
+      logSystemError('ERR-02', 'La API de Spotify rechazó la renovación del token de acceso.', new Error(JSON.stringify(data)));
     }
   } catch (error) {
-    console.error('Error al renovar el token de Spotify:', error);
+    logSystemError('ERR-02', 'Excepción de red al renovar token de Spotify.', error);
   }
 }
 
@@ -208,7 +211,9 @@ let currentPlaybackState = {
   isPlaying: false,
   volume: 50,
   speed: 1.0,
-  queue: []
+  queue: [],
+  guildCount: 0,
+  voiceConnected: false
 };
 
 // -------------------------------------------------------------
@@ -271,7 +276,7 @@ app.get('/callback', async (req, res) => {
       res.send('Error al obtener el token de Spotify: ' + JSON.stringify(data));
     }
   } catch (error) {
-    console.error('Error durante el intercambio de tokens:', error);
+    logSystemError('ERR-02', 'Error en el callback de intercambio de Spotify.', error);
     res.status(500).send('Error interno del servidor');
   }
 });
@@ -285,6 +290,10 @@ app.get('/api/state', (req, res) => {
       lastSyncProgressMs + Math.round(elapsed * currentSpeed)
     );
   }
+  
+  // Agregar metadata dinámica del bot a la web
+  currentPlaybackState.guildCount = client.guilds.cache.size;
+  currentPlaybackState.voiceConnected = voiceConnection !== null;
   res.json(currentPlaybackState);
 });
 
@@ -348,7 +357,10 @@ app.post('/api/seek', async (req, res) => {
 
 app.post('/api/play-pause', async (req, res) => {
   const token = await getValidAccessToken();
-  if (!token) return res.status(401).json({ error: 'No autenticado en Spotify.' });
+  if (!token) {
+    logSystemError('ERR-02', 'Intento de reproducir/pausar música sin cuenta de Spotify vinculada.');
+    return res.status(401).json({ error: 'No autenticado en Spotify.' });
+  }
 
   try {
     const action = currentPlaybackState.isPlaying ? 'pause' : 'play';
@@ -370,7 +382,7 @@ app.post('/api/play-pause', async (req, res) => {
     const errData = await response.json().catch(() => ({}));
     res.status(response.status).json(errData);
   } catch (error) {
-    console.error(error);
+    logSystemError('ERR-02', 'Error de red al alternar play/pause de Spotify.', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -389,6 +401,7 @@ app.post('/api/next', async (req, res) => {
     }
     res.status(response.status).json({ error: 'Error al saltar' });
   } catch (e) {
+    logSystemError('ERR-02', 'Fallo al saltar de canción en Spotify.', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -406,6 +419,7 @@ app.post('/api/previous', async (req, res) => {
     }
     res.status(response.status).json({ error: 'Error al retroceder' });
   } catch (e) {
+    logSystemError('ERR-02', 'Fallo al retroceder canción en Spotify.', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -426,11 +440,12 @@ app.post('/api/play-track', async (req, res) => {
     }
     res.status(response.status).json({ error: 'Error al reproducir track' });
   } catch (e) {
+    logSystemError('ERR-02', 'Fallo al forzar reproducción de track en Spotify.', e);
     res.status(500).json({ error: e.message });
   }
 });
 
-// Enviar mensajes al canal sin pings ni menciones
+// Enviar mensajes al canal con menciones de usuarios y roles activadas
 app.post('/api/message', async (req, res) => {
   const { message, channelId } = req.body;
   if (!message) return res.status(400).json({ error: 'Mensaje vacío.' });
@@ -443,15 +458,17 @@ app.post('/api/message', async (req, res) => {
   try {
     const channel = await client.channels.fetch(targetChannelId);
     if (channel) {
+      // Permitimos mencionar usuarios, roles y pings generales
       await channel.send({
         content: `**Panel**: ${message}`,
-        allowedMentions: { parse: [] }
+        allowedMentions: { parse: ['users', 'roles', 'everyone'] }
       });
       lastTextChannel = channel;
       return res.json({ success: true });
     }
     res.status(404).json({ error: 'Canal no encontrado.' });
   } catch (e) {
+    logSystemError('ERR-05', 'Fallo al escribir en canal de texto de Discord.', e);
     return res.status(500).json({ error: e.message });
   }
 });
@@ -480,6 +497,7 @@ app.get('/api/search', async (req, res) => {
     }
     res.status(response.status).json({ error: 'Error al buscar en Spotify.' });
   } catch (e) {
+    logSystemError('ERR-02', 'Error en consulta de búsqueda a Spotify.', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -502,6 +520,7 @@ app.post('/api/queue', async (req, res) => {
     const errData = await response.json().catch(() => ({}));
     res.status(response.status).json(errData);
   } catch (error) {
+    logSystemError('ERR-02', 'Fallo al encolar canción en Spotify.', error);
     res.status(500).json({ error: error.message });
   }
 });
@@ -726,13 +745,13 @@ client.on('messageCreate', async (message) => {
         if (newState.status === AudioPlayerStatus.Idle) {
           const token = await getValidAccessToken();
           if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing) {
-            console.log('[SISTEMA AUTO-SANACIÓN] Caída de stream de YouTube (I/O o TLS reset). Re-conectando audio al segundo actual...');
+            logSystemError('ERR-01', 'Pérdida de red o Connection Reset de YouTube (10054). Iniciando reconexión auto-sanable...');
             isSyncing = true;
             setTimeout(async () => {
               try {
                 await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
               } catch (e) {
-                console.error('[AUTO-SANACIÓN] Error al re-conectar el stream:', e);
+                logSystemError('ERR-01', 'Fallo al auto-reconectar el flujo tras caída de YouTube.', e);
               } finally {
                 isSyncing = false;
               }
@@ -742,7 +761,7 @@ client.on('messageCreate', async (message) => {
       });
 
       audioPlayer.on('error', error => {
-        console.error('Error controlado en el reproductor de audio:', error.message);
+        logSystemError('ERR-04', 'Error controlado en el reproductor de audio de voz.', error);
       });
 
       if (spotifyAccessToken) {
@@ -753,7 +772,7 @@ client.on('messageCreate', async (message) => {
 
       startSyncLoop(message.guild.id);
     } catch (error) {
-      console.error('Error al unirse al canal de voz:', error);
+      logSystemError('ERR-04', 'Excepción crítica al unirse al canal de voz de Discord.', error);
       message.reply('No pude unirme al canal de voz.');
     }
   }
@@ -870,7 +889,7 @@ async function syncSpotifyPlayback(guildId) {
         }
       }
     } catch (e) {
-      console.error('Error al obtener cola de Spotify:', e);
+      logSystemError('ERR-02', 'Error al consultar lista de cola a la API de Spotify.', e);
     }
 
     // Actualizar estado del panel web
@@ -922,7 +941,7 @@ async function syncSpotifyPlayback(guildId) {
       }
     }
   } catch (error) {
-    console.error('Error al consultar la reproducción de Spotify:', error);
+    logSystemError('ERR-02', 'Excepción en el bucle de sincronización con Spotify.', error);
     isSyncing = false;
   }
 }
@@ -956,7 +975,7 @@ async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotif
     const searchResults = await play.search(searchQuery, { limit: 1 });
 
     if (searchResults.length === 0) {
-      console.error('No se encontraron resultados en YouTube.');
+      logSystemError('ERR-03', `No se encontraron resultados en YouTube para: ${searchQuery}`);
       return;
     }
 
@@ -964,7 +983,7 @@ async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotif
     console.log(`Stream de YouTube encontrado: ${currentYoutubeUrl}`);
     await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify);
   } catch (error) {
-    console.error('Error al buscar la canción:', error);
+    logSystemError('ERR-03', 'Error crítico en búsqueda de YouTube.', error);
   }
 }
 
@@ -997,7 +1016,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     });
 
     activeFfmpegProcess.stderr.on('data', (data) => {
-      console.log(`[FFMPEG ERROR] ${data.toString().trim()}`);
+      // Ignorado para no saturar con el progreso de FFmpeg, solo errores reales se capturan en catch
     });
 
     activeFfmpegProcess.on('exit', (code, signal) => {
@@ -1020,7 +1039,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     lastSyncProgressMs = progressMs;
     lastSyncTimestamp = Date.now();
   } catch (error) {
-    console.error('Error al transmitir el audio:', error);
+    logSystemError('ERR-01', 'Fallo al abrir o decodificar flujo de audio con FFmpeg.', error);
   }
 }
 

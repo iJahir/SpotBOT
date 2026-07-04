@@ -14,7 +14,7 @@
       --glass-border: rgba(255, 255, 255, 0.08);
       --text: #ffffff;
       --text-muted: rgba(255, 255, 255, 0.6);
-      --terminal-bg: rgba(0, 0, 0, 0.4);
+      --terminal-bg: #090a15;
     }
 
     * {
@@ -22,6 +22,21 @@
       margin: 0;
       padding: 0;
       font-family: 'Inter', sans-serif;
+    }
+
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.1);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--primary);
     }
 
     body {
@@ -85,11 +100,56 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 20px;
+      margin-bottom: 12px;
     }
 
     header h1 span {
       color: var(--primary);
+    }
+
+    /* Status Bar */
+    .status-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 20px;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .status-pill {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .status-pill.online {
+      color: #00ff66;
+      border-color: rgba(0, 255, 102, 0.2);
+      background: rgba(0, 255, 102, 0.05);
+    }
+
+    .status-pill.servers {
+      color: #00ccff;
+      border-color: rgba(0, 204, 255, 0.2);
+      background: rgba(0, 204, 255, 0.05);
+    }
+
+    .status-pill.voice {
+      color: #ff9900;
+      border-color: rgba(255, 153, 0, 0.2);
+      background: rgba(255, 153, 0, 0.05);
+    }
+
+    .status-pill.voice.connected {
+      color: #00ff66;
+      border-color: rgba(0, 255, 102, 0.2);
+      background: rgba(0, 255, 102, 0.05);
     }
 
     /* Tabs System */
@@ -278,7 +338,7 @@
       fill: currentColor;
     }
 
-    /* Speed and Volume Control Row */
+    /* Control Rows */
     .control-row {
       width: 100%;
       margin-bottom: 16px;
@@ -377,7 +437,7 @@
       background: rgba(0,0,0,0.25);
       border: 1px solid var(--glass-border);
       border-radius: 10px;
-      padding: 8px 12px;
+      padding: 10px 12px;
       color: #fff;
       font-size: 0.85rem;
       outline: none;
@@ -388,10 +448,10 @@
       border: none;
       border-radius: 10px;
       color: #fff;
-      padding: 0 14px;
+      padding: 0 16px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 0.8rem;
+      font-size: 0.85rem;
     }
 
     .search-results {
@@ -456,13 +516,9 @@
     }
 
     .btn-add-q {
-      background: rgba(255,255,255,0.08);
+      background: rgba(255, 255, 255, 0.08);
       color: white;
       border: 1px solid rgba(255,255,255,0.1);
-    }
-
-    .btn-add-q:hover {
-      background: rgba(255,255,255,0.15);
     }
 
     .btn-play-now {
@@ -471,19 +527,13 @@
       border: 1px solid var(--primary);
     }
 
-    .btn-play-now:hover {
-      background: var(--primary);
-      color: white;
-    }
-
-    /* Queue Container */
+    /* Queue */
     .queue-container {
       width: 100%;
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--glass-border);
       padding: 12px;
       border-radius: 16px;
-      text-align: left;
     }
 
     .queue-list {
@@ -502,7 +552,7 @@
       border-radius: 8px;
       cursor: pointer;
       border: 1px solid transparent;
-      transition: background 0.2s, border-color 0.2s;
+      transition: background 0.2s;
     }
 
     .queue-item:hover {
@@ -517,7 +567,7 @@
       object-fit: cover;
     }
 
-    /* INTEGRACIÓN DE CHAT DISCORD */
+    /* DISCORD CHAT DE CORTE PREMIUM */
     .discord-chat-layout {
       width: 100%;
       display: flex;
@@ -526,13 +576,9 @@
       text-align: left;
     }
 
-    .channel-select-wrapper {
-      width: 100%;
-    }
-
     .channel-select {
       width: 100%;
-      background: rgba(0,0,0,0.3);
+      background: rgba(0, 0, 0, 0.3);
       border: 1px solid var(--glass-border);
       border-radius: 10px;
       padding: 10px;
@@ -543,32 +589,49 @@
 
     .messages-viewer {
       width: 100%;
-      height: 250px;
-      background: rgba(0,0,0,0.2);
+      height: 280px;
+      background: rgba(0, 0, 0, 0.25);
       border: 1px solid var(--glass-border);
       border-radius: 16px;
       padding: 12px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
 
-    .chat-msg {
-      font-size: 0.8rem;
-      line-height: 1.3;
-      padding: 4px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.02);
+    .chat-bubble {
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 8px 12px;
+      border-radius: 12px;
+      max-width: 90%;
+      align-self: flex-start;
     }
 
-    .chat-msg-author {
+    .chat-bubble.panel-msg {
+      background: rgba(29, 185, 84, 0.1);
+      border-color: rgba(29, 185, 84, 0.2);
+      align-self: flex-end;
+    }
+
+    .chat-bubble-author {
+      font-size: 0.75rem;
       font-weight: 700;
       color: var(--primary);
-      margin-right: 6px;
+      margin-bottom: 2px;
     }
 
-    .chat-msg-content {
-      color: rgba(255,255,255,0.9);
+    .chat-bubble.panel-msg .chat-bubble-author {
+      color: #6eff95;
+    }
+
+    .chat-bubble-content {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.95);
+      word-break: break-word;
     }
 
     /* CONSOLA DE REGISTROS (LOGS) */
@@ -579,7 +642,7 @@
 
     .terminal-screen {
       width: 100%;
-      height: 320px;
+      height: 240px;
       background: var(--terminal-bg);
       border: 1px solid var(--glass-border);
       border-radius: 16px;
@@ -587,10 +650,28 @@
       font-family: 'Courier New', Courier, monospace;
       font-size: 0.75rem;
       color: #00ff66;
+      text-shadow: 0 0 4px rgba(0, 255, 102, 0.5);
       overflow-y: auto;
       white-space: pre-wrap;
       line-height: 1.4;
       box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
+      margin-bottom: 12px;
+    }
+
+    .errors-legend {
+      background: rgba(255, 0, 0, 0.05);
+      border: 1px solid rgba(255, 0, 0, 0.15);
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 0.75rem;
+      color: #ff6666;
+    }
+
+    .errors-legend-title {
+      font-weight: 700;
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
 
     /* Toast */
@@ -625,6 +706,13 @@
         <h1>Spot<span>BOT</span> Panel</h1>
       </header>
 
+      <!-- Barra de Estado en Tiempo Real -->
+      <div class="status-bar">
+        <span class="status-pill online">● Online</span>
+        <span class="status-pill servers" id="statusServers">Servidores: --</span>
+        <span class="status-pill voice" id="statusVoice">Voz: --</span>
+      </div>
+
       <!-- Pestañas de Navegación -->
       <div class="tabs-nav">
         <button class="tab-btn active" onclick="switchTab('reproductor')">🎵 Música</button>
@@ -654,29 +742,24 @@
           </div>
         </div>
 
-        <!-- Controles Multimedia completos -->
+        <!-- Controles Multimedia -->
         <div class="media-controls">
-          <!-- Anterior -->
           <button class="btn-ctrl btn-skip" onclick="spotifyPrevious()" title="Canción anterior">
             <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
 
-          <!-- Retroceder 30s -->
           <button class="btn-ctrl btn-seek-side" onclick="seek(-30)" title="-30 segundos">
             <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.63 7.82h-.99v2.24H8.36v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
-        </button>
+          </button>
 
-          <!-- Play/Pause -->
           <button class="btn-ctrl btn-play-pause" onclick="togglePlayPause()" id="btnPlayPause">
             <svg viewBox="0 0 24 24" id="svgPlayPause"><path d="M8 5v14l11-7z"/></svg>
           </button>
 
-          <!-- Adelantar 30s -->
           <button class="btn-ctrl btn-seek-side" onclick="seek(30)" title="+30 segundos">
             <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm1.63 7.82h-.99v2.24H11.72v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
           </button>
 
-          <!-- Siguiente -->
           <button class="btn-ctrl btn-skip" onclick="spotifyNext()" title="Siguiente canción">
             <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
           </button>
@@ -734,14 +817,14 @@
             </select>
           </div>
 
-          <label class="control-label">Mensajes Recientes</label>
+          <label class="control-label">Bandeja de Entrada</label>
           <div class="messages-viewer" id="messagesViewer">
             <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px;">Selecciona un canal para cargar mensajes</div>
           </div>
 
-          <label class="control-label">Responder / Mensajear</label>
+          <label class="control-label">Responder (Menciones permitidas, e.g. @Usuario)</label>
           <div class="chat-input-wrapper">
-            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe un mensaje al canal..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe tu mensaje o mención..." onkeydown="if(event.key==='Enter') sendMessage()">
             <button class="btn-send" onclick="sendMessage()">Mandar</button>
           </div>
         </div>
@@ -750,8 +833,17 @@
       <!-- PESTAÑA 3: CONSOLA DE SISTEMA -->
       <div id="tab-consola" class="tab-content">
         <div class="terminal-container">
-          <span class="control-label">Logs del Servidor y Errores (Tiempo Real)</span>
+          <span class="control-label">Logs y Errores (Tiempo Real)</span>
           <div class="terminal-screen" id="terminalScreen">Cargando consola del bot...</div>
+          
+          <div class="errors-legend">
+            <div class="errors-legend-title">📚 Leyenda de Errores:</div>
+            • <b>ERR-01</b>: Pérdida de red con YouTube (auto-reconexión iniciada).<br>
+            • <b>ERR-02</b>: Spotify desvinculado o sesión expirada.<br>
+            • <b>ERR-03</b>: Canción no encontrada en YouTube.<br>
+            • <b>ERR-04</b>: Imposible conectar al canal de voz.<br>
+            • <b>ERR-05</b>: Error al escribir mensaje en Discord.
+          </div>
         </div>
       </div>
 
@@ -785,13 +877,11 @@
       return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
-    // Navegar entre pestañas
     function switchTab(tabId) {
       activeTab = tabId;
       document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
       document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
 
-      // Marcar botón activo
       event.currentTarget.classList.add('active');
       document.getElementById(`tab-${tabId}`).classList.add('active');
 
@@ -808,14 +898,26 @@
     }
 
     // -----------------------------------------------------------
-    // FUNCIONES DEL REPRODUCTOR
+    // FUNCIONES DEL REPRODUCTOR Y ESTADO GENERAL
     // -----------------------------------------------------------
     async function updateState() {
-      if (activeTab !== 'reproductor') return;
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
         const data = await res.json();
+
+        // Barra de estado global
+        document.getElementById('statusServers').innerText = `Servidores: ${data.guildCount || 0}`;
+        const voicePill = document.getElementById('statusVoice');
+        if (data.voiceConnected) {
+          voicePill.innerText = 'Voz: Conectado';
+          voicePill.classList.add('connected');
+        } else {
+          voicePill.innerText = 'Voz: Desconectado';
+          voicePill.classList.remove('connected');
+        }
+
+        if (activeTab !== 'reproductor') return;
 
         document.getElementById('songTitle').innerText = data.title;
         document.getElementById('songArtist').innerText = data.artist || 'Sin artista';
@@ -872,11 +974,10 @@
         }
 
       } catch (e) {
-        console.error('Error al actualizar el estado del dashboard:', e);
+        console.error('Error al actualizar el estado:', e);
       }
     }
 
-    // Controles Siguiente / Anterior de Spotify
     async function spotifyNext() {
       try {
         const res = await fetch('/api/next', { method: 'POST' });
@@ -1032,7 +1133,7 @@
     }
 
     // -----------------------------------------------------------
-    // FUNCIONES DE CHAT DISCORD
+    // CHAT DISCORD CON BURBUJAS MODERNAS
     // -----------------------------------------------------------
     async function loadChannels() {
       try {
@@ -1065,8 +1166,6 @@
       }
       
       loadMessages();
-      
-      // Auto refrescar chat cada 4 segundos
       clearInterval(chatRefreshInterval);
       chatRefreshInterval = setInterval(loadMessages, 4000);
     }
@@ -1085,13 +1184,19 @@
 
         viewer.innerHTML = '';
         messages.forEach(msg => {
-          const row = document.createElement('div');
-          row.className = 'chat-msg';
-          row.innerHTML = `<span class="chat-msg-author">${msg.author}:</span><span class="chat-msg-content">${msg.content}</span>`;
-          viewer.appendChild(row);
+          const isPanel = msg.content.startsWith('**Panel**:');
+          const cleanContent = isPanel ? msg.content.replace('**Panel**:', '').trim() : msg.content;
+          
+          const bubble = document.createElement('div');
+          bubble.className = `chat-bubble ${isPanel ? 'panel-msg' : ''}`;
+          
+          bubble.innerHTML = `
+            <span class="chat-bubble-author">${isPanel ? 'Panel (Tú)' : msg.author}</span>
+            <span class="chat-bubble-content">${cleanContent}</span>
+          `;
+          viewer.appendChild(bubble);
         });
 
-        // Scroll al final del chat
         viewer.scrollTop = viewer.scrollHeight;
       } catch (e) {
         console.error('Error al cargar mensajes:', e);
@@ -1121,7 +1226,7 @@
     }
 
     // -----------------------------------------------------------
-    // FUNCIONES DE LA CONSOLA (LOGS)
+    // TERMINAL Y LOGS DE ERRORES CATEGORIZADOS
     // -----------------------------------------------------------
     async function loadLogs() {
       if (activeTab !== 'consola') return;
@@ -1130,15 +1235,12 @@
         const logs = await res.json();
         const terminal = document.getElementById('terminalScreen');
         terminal.innerText = logs.join('\n');
-        
-        // Auto scroll
         terminal.scrollTop = terminal.scrollHeight;
       } catch (e) {
         console.error('Error al cargar logs:', e);
       }
     }
 
-    // Clic barra progreso
     document.getElementById('progressBarBg').addEventListener('click', async (e) => {
       if (durationMs <= 0) return;
       const rect = e.currentTarget.getBoundingClientRect();
@@ -1165,8 +1267,6 @@
     // Bucles principales
     updateState();
     setInterval(updateState, 2000);
-
-    // Consola refresco continuo cada 3 segundos
     setInterval(loadLogs, 3000);
 
     setInterval(() => {
