@@ -444,7 +444,7 @@ app.post('/api/play-track', async (req, res) => {
   }
 });
 
-// Enviar mensajes al canal con parseo automático de menciones por texto (@NombreUsuario)
+// Enviar mensajes al canal con búsqueda activa de miembros por nombre en la API de Discord
 app.post('/api/message', async (req, res) => {
   const { message, channelId } = req.body;
   if (!message) return res.status(400).json({ error: 'Mensaje vacío.' });
@@ -459,28 +459,33 @@ app.post('/api/message', async (req, res) => {
     if (channel) {
       let parsedMessage = message;
 
-      // Buscar nombres y nicknames escritos como @NombreUsuario para convertirlos en mención real de Discord
+      // Buscar nombres y nicknames con búsqueda activa en el servidor de Discord
       if (channel.guild) {
         try {
-          const members = await channel.guild.members.fetch();
           const mentionRegex = /@([a-zA-Z0-9_\-\.]+)/g;
           const matches = [...parsedMessage.matchAll(mentionRegex)];
           
           for (const m of matches) {
-            const fullMatch = m[0]; // e.g. "@UsuarioX"
+            const fullMatch = m[0]; // e.g. "@TheAngel07"
             const username = m[1].toLowerCase();
             
-            const member = members.find(mbr => 
+            // Buscar activamente el nombre usando la API de Discord (no depende de intents de miembros)
+            const searchResults = await channel.guild.members.search({ query: username, limit: 5 });
+            
+            const member = searchResults.find(mbr => 
               mbr.user.username.toLowerCase() === username || 
-              (mbr.nickname && mbr.nickname.toLowerCase() === username)
-            );
+              (mbr.nickname && mbr.nickname.toLowerCase() === username) ||
+              mbr.displayName.toLowerCase() === username ||
+              (mbr.user.globalName && mbr.user.globalName.toLowerCase() === username)
+            ) || searchResults.first();
             
             if (member) {
+              console.log(`[DISCORD CHAT] Reemplazando mención texto ${fullMatch} por ID de usuario <@${member.id}>`);
               parsedMessage = parsedMessage.replace(fullMatch, `<@${member.id}>`);
             }
           }
         } catch (err) {
-          console.error('Error al resolver menciones por texto:', err);
+          console.error('Error al resolver mención por búsqueda de Discord:', err);
         }
       }
 
@@ -527,7 +532,7 @@ app.get('/api/search', async (req, res) => {
   }
 });
 
-// Añadir canción a la cola de Spotify
+// Encolar canción en Spotify
 app.post('/api/queue', async (req, res) => {
   const { uri } = req.body;
   const token = await getValidAccessToken();
@@ -535,7 +540,7 @@ app.post('/api/queue', async (req, res) => {
   if (!uri) return res.status(400).json({ error: 'Falta la URI del track.' });
 
   try {
-    const response = await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(uri)}`, {
+    const response = await fetch('https://api.spotify.com/v1/me/player/queue?uri=' + encodeURIComponent(uri), {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -586,7 +591,6 @@ app.get('/api/channels/:id/messages', async (req, res) => {
       author: msg.author.username,
       content: msg.content,
       timestamp: msg.createdAt,
-      // Si el autor es el propio bot, marcamos isMe en verdadero
       isMe: msg.author.id === client.user.id
     })).reverse();
     res.json(formatted);
@@ -954,6 +958,7 @@ async function syncSpotifyPlayback(guildId) {
 
     if (isPlayingOnSpotify) {
       const timeSinceLastSync = Date.now() - lastSyncTimestamp;
+      const { encodeURIComponent } = globalThis;
       const expectedProgress = lastSyncProgressMs + Math.round(timeSinceLastSync * currentSpeed);
       const drift = Math.abs(progressMs - expectedProgress);
 
@@ -1043,7 +1048,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     });
 
     activeFfmpegProcess.stderr.on('data', (data) => {
-      // Ignorado para no saturar con el progreso de FFmpeg, solo errores reales se capturan en catch
+      // Ignorado
     });
 
     activeFfmpegProcess.on('exit', (code, signal) => {
