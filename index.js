@@ -158,7 +158,7 @@ app.get('/linked-roles', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'linked-roles.html'));
 });
 
-// Endpoint de Interacciones de Discord (con firma ed25519 requerida por Discord)
+// Endpoint de Interacciones de Discord
 app.post('/interactions', express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf;
@@ -194,7 +194,6 @@ app.post('/interactions', express.json({
     return res.status(401).send('Firma de interacción inválida.');
   }
 
-  // Responder a PING de Discord (Tipo 1) para validar el endpoint
   const interaction = req.body;
   if (interaction.type === 1) {
     return res.json({ type: 1 });
@@ -213,7 +212,6 @@ app.listen(PORT, () => {
   console.log(`- Endpoint de Interacciones: http://localhost:${PORT}/interactions`);
   console.log(`============================================================\n`);
   
-  // Generar QR en consola
   qrcode.generate(loginUrl, { small: true });
 });
 
@@ -253,11 +251,8 @@ client.on('messageCreate', async (message) => {
       return message.reply('Debes estar en un canal de voz para usar este comando.');
     }
 
-    if (!spotifyAccessToken) {
-      return message.reply(`Por favor, vincula tu cuenta de Spotify primero escaneando el código QR de la consola o visitando: ${loginUrl}`);
-    }
-
     try {
+      // Unirse al canal de voz inmediatamente
       voiceConnection = joinVoiceChannel({
         channelId: member.voice.channel.id,
         guildId: message.guild.id,
@@ -267,7 +262,13 @@ client.on('messageCreate', async (message) => {
       audioPlayer = createAudioPlayer();
       voiceConnection.subscribe(audioPlayer);
 
-      message.reply(`¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.`);
+      // Si Spotify ya está vinculado, iniciar sincronización
+      if (spotifyAccessToken) {
+        message.reply(`¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.`);
+      } else {
+        message.reply(`¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo este enlace en tu navegador o escaneando el código QR de la consola: ${loginUrl}`);
+      }
+
       startSyncLoop();
     } catch (error) {
       console.error('Error al unirse al canal de voz:', error);
@@ -308,8 +309,12 @@ function stopSyncLoop() {
 }
 
 async function syncSpotifyPlayback() {
+  // Intentar obtener el token. Si el usuario aún no se ha logueado, reintentará en el próximo ciclo
   const token = await getValidAccessToken();
-  if (!token || !audioPlayer) return;
+  if (!token || !audioPlayer) {
+    // Si no hay token, no hacemos nada en este ciclo
+    return;
+  }
 
   try {
     const response = await fetch('https://api.spotify.com/v1/me/player', {
