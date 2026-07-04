@@ -513,7 +513,6 @@ app.get('/api/channels', async (req, res) => {
     for (const [guildId, guild] of client.guilds.cache) {
       const guildChannels = await guild.channels.fetch();
       for (const [channelId, channel] of guildChannels) {
-        // channel.type === 0 es canal de texto normal
         if (channel.type === 0) {
           channelsList.push({
             id: channel.id,
@@ -719,8 +718,27 @@ client.on('messageCreate', async (message) => {
       audioPlayer = createAudioPlayer();
       voiceConnection.subscribe(audioPlayer);
 
-      audioPlayer.on('stateChange', (oldState, newState) => {
+      // Monitorear cambios de estado del reproductor de audio (Auto-Sanación ante desconexiones de YouTube)
+      audioPlayer.on('stateChange', async (oldState, newState) => {
         console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
+        
+        // Auto-Sanación: Si pasa a IDLE de forma imprevista pero Spotify sigue reproduciendo, se cayó la red
+        if (newState.status === AudioPlayerStatus.Idle) {
+          const token = await getValidAccessToken();
+          if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing) {
+            console.log('[SISTEMA AUTO-SANACIÓN] Caída de stream de YouTube (I/O o TLS reset). Re-conectando audio al segundo actual...');
+            isSyncing = true;
+            setTimeout(async () => {
+              try {
+                await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
+              } catch (e) {
+                console.error('[AUTO-SANACIÓN] Error al re-conectar el stream:', e);
+              } finally {
+                isSyncing = false;
+              }
+            }, 1000);
+          }
+        }
       });
 
       audioPlayer.on('error', error => {
