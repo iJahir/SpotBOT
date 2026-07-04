@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import https from 'https';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { exec, spawn } from 'child_process';
@@ -44,6 +45,24 @@ if (!DISCORD_TOKEN || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SPOTIFY_R
   console.error('ERROR: Faltan variables de entorno esenciales en tu archivo .env.');
   process.exit(1);
 }
+
+// -------------------------------------------------------------
+// OBTENER IP LOCAL DE LA RED PARA EL QR MÓVIL
+// -------------------------------------------------------------
+function getLocalIpAddress() {
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name]) {
+      // Saltar direcciones internas (127.0.0.1) e IPv6
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address;
+      }
+    }
+  }
+  return '127.0.0.1'; // Fallback
+}
+
+const localIp = getLocalIpAddress();
 
 // -------------------------------------------------------------
 // DESCARGA AUTOMÁTICA DE YT-DLP
@@ -138,7 +157,8 @@ async function getValidAccessToken() {
 // SERVIDOR WEB EXPRESS
 // -------------------------------------------------------------
 const app = express();
-const loginUrl = `http://127.0.0.1:${PORT}/login`;
+// Usar la IP local del PC para el login
+const loginUrl = `http://${localIp}:${PORT}/login`;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
@@ -259,12 +279,13 @@ downloadYtDlp().then(() => {
     console.log(`\n============================================================`);
     console.log(`Servidor web activo para autenticación de Spotify y URLs de Discord.`);
     console.log(`- Enlace de login (Spotify): ${loginUrl}`);
-    console.log(`- Términos de Servicio y Donaciones: http://localhost:${PORT}/terms`);
-    console.log(`- Política de Privacidad: http://localhost:${PORT}/privacy`);
-    console.log(`- Verificación de Roles: http://localhost:${PORT}/linked-roles`);
-    console.log(`- Endpoint de Interacciones: http://localhost:${PORT}/interactions`);
+    console.log(`- Términos de Servicio y Donaciones: http://${localIp}:${PORT}/terms`);
+    console.log(`- Política de Privacidad: http://${localIp}:${PORT}/privacy`);
+    console.log(`- Verificación de Roles: http://${localIp}:${PORT}/linked-roles`);
+    console.log(`- Endpoint de Interacciones: http://${localIp}:${PORT}/interactions`);
     console.log(`============================================================\n`);
     
+    // Generar código QR apuntando a la IP local para que el móvil pueda leerlo en la misma red
     qrcode.generate(loginUrl, { small: true });
   });
 }).catch(err => {
@@ -391,7 +412,6 @@ function stopSyncLoop() {
 async function syncSpotifyPlayback(guildId) {
   const token = await getValidAccessToken();
   if (!token || !audioPlayer) {
-    // Si no hay token o no se ha unido al canal, verificamos inactividad
     checkInactivity(guildId, false);
     return;
   }
@@ -424,7 +444,6 @@ async function syncSpotifyPlayback(guildId) {
     const trackName = playback.item.name;
     const artistName = playback.item.artists[0]?.name || '';
 
-    // Si Spotify está sonando, reseteamos la inactividad
     checkInactivity(guildId, isPlayingOnSpotify);
 
     if (trackId !== currentTrackId) {
@@ -461,7 +480,7 @@ async function syncSpotifyPlayback(guildId) {
   }
 }
 
-// Control de inactividad (desconexión a los 2 minutos)
+// Control de inactividad
 function checkInactivity(guildId, isPlaying) {
   if (isPlaying) {
     if (inactivityTimeoutId) {
@@ -478,7 +497,7 @@ function checkInactivity(guildId, isPlaying) {
           lastTextChannel.send('⚠️ Me he desconectado del canal de voz por inactividad (2 minutos sin reproducir música).');
         }
         cleanupAndLeave(guildId);
-      }, 120000); // 2 minutos
+      }, 120000);
     }
   }
 }
@@ -512,7 +531,6 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
 
     console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds}...`);
     
-    // Iniciar FFmpeg para decodificar el audio directo en formato Ogg Opus compatible con Discord
     activeFfmpegProcess = spawn(ffmpegPath, [
       '-ss', seekSeconds.toString(),
       '-i', directAudioUrl,
