@@ -28,6 +28,7 @@ const execPromise = util.promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ytDlpPath = path.join(__dirname, 'yt-dlp.exe');
+const stateFilePath = path.join(__dirname, '.bot_state.json');
 
 // Comprobar variables de entorno
 const {
@@ -313,8 +314,29 @@ let lastTextChannel = null;
 let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
 
-client.on('ready', () => {
+client.on('ready', async () => {
   console.log(`Bot de Discord listo como: ${client.user.tag}`);
+
+  // Verificar si hay un estado guardado del canal para anunciar los cambios tras reiniciar
+  if (fs.existsSync(stateFilePath)) {
+    try {
+      const state = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
+      fs.unlinkSync(stateFilePath); // Limpiar archivo de estado
+
+      if (state.channelId) {
+        const channel = await client.channels.fetch(state.channelId);
+        if (channel) {
+          channel.send(`¡**He vuelto**! 🚀 He realizado los siguientes cambios en mi sistema:
+🛠️ **Sincronización robusta**: Implementada vía el extractor nativo \`yt-dlp.exe\` para evitar bloqueos y errores 403.
+🔊 **Audio activado**: Integrado el decodificador \`opusscript\` para resolver los problemas de silencio al cantar.
+⏱️ **Inactividad**: Me desconectaré automáticamente del canal de voz si pasas más de 2 minutos sin sonar música.
+👋 **Apagado controlado**: Ahora me saldré del canal limpiamente y te avisaré si el host me apaga con \`Ctrl + C\`.`);
+        }
+      }
+    } catch (e) {
+      console.error('Error al restaurar estado de canal:', e);
+    }
+  }
 });
 
 client.on('messageCreate', async (message) => {
@@ -565,10 +587,27 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
 // -------------------------------------------------------------
 // SALIDA LIMPIA Y CONTROLADA (GRACEFUL SHUTDOWN)
 // -------------------------------------------------------------
-const handleShutdown = () => {
+const handleShutdown = async () => {
   console.log('\nApagando el bot de forma segura y saliendo de los canales de voz...');
+  
+  if (lastTextChannel) {
+    try {
+      // Guardar el estado del último canal de texto para recordar dónde anunciar los cambios al volver
+      fs.writeFileSync(stateFilePath, JSON.stringify({ channelId: lastTextChannel.id }), 'utf8');
+      
+      // Enviar mensaje de despedida antes de apagar
+      await lastTextChannel.send('⚠️ Me apagaré temporalmente porque mi desarrollador hará algunos ajustes. ¡Vuelvo enseguida!');
+    } catch (e) {
+      console.error('Error al guardar estado de salida:', e);
+    }
+  }
+  
   cleanupAndLeave();
-  process.exit(0);
+  
+  // Esperar un segundo para garantizar el envío del mensaje en Discord antes de matar el proceso
+  setTimeout(() => {
+    process.exit(0);
+  }, 1000);
 };
 
 process.on('SIGINT', handleShutdown);
