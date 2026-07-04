@@ -366,7 +366,6 @@ client.on('messageCreate', async (message) => {
     try {
       lastTextChannel = message.channel;
 
-      // Unirse forzando deafen falso y mute falso
       voiceConnection = joinVoiceChannel({
         channelId: member.voice.channel.id,
         guildId: message.guild.id,
@@ -375,7 +374,6 @@ client.on('messageCreate', async (message) => {
         selfMute: false
       });
 
-      // Monitorear cambios de estado de la conexión de voz
       voiceConnection.on('stateChange', (oldState, newState) => {
         console.log(`[CONEXIÓN DISCORD] Estado: ${oldState.status} -> ${newState.status}`);
       });
@@ -383,7 +381,6 @@ client.on('messageCreate', async (message) => {
       audioPlayer = createAudioPlayer();
       voiceConnection.subscribe(audioPlayer);
 
-      // Monitorear cambios de estado del reproductor de audio
       audioPlayer.on('stateChange', (oldState, newState) => {
         console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
       });
@@ -520,7 +517,6 @@ async function syncSpotifyPlayback(guildId) {
       const expectedProgress = lastSyncProgressMs + timeSinceLastSync;
       const drift = Math.abs(progressMs - expectedProgress);
 
-      // Aumentado a 15 segundos para evitar micro-ajustes repetitivos que silencian el bot
       if (drift > 15000) {
         console.log(`Desfase mayor a 15s detectado (${drift}ms). Ajustando reproducción de Discord al segundo: ${Math.round(progressMs / 1000)}s.`);
         isSyncing = true;
@@ -588,6 +584,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
 
     console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds} (PCM Crudo)...`);
     
+    // Capturamos stderr de FFmpeg cambiando el stdio a ['ignore', 'pipe', 'pipe']
     activeFfmpegProcess = spawn(ffmpegPath, [
       '-ss', seekSeconds.toString(),
       '-i', directAudioUrl,
@@ -596,7 +593,16 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
       '-ac', '2',
       'pipe:1'
     ], {
-      stdio: ['ignore', 'pipe', 'ignore']
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    // Escuchar el canal de error para saber si FFmpeg falla
+    activeFfmpegProcess.stderr.on('data', (data) => {
+      console.log(`[FFMPEG ERROR] ${data.toString().trim()}`);
+    });
+
+    activeFfmpegProcess.on('exit', (code, signal) => {
+      console.log(`[FFMPEG PROCESO] Salida del proceso. Codigo: ${code}, Senal: ${signal}`);
     });
 
     const resource = createAudioResource(activeFfmpegProcess.stdout, {
