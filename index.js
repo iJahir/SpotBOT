@@ -313,15 +313,15 @@ let lastTextChannel = null;
 
 let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
-let isSyncing = false; // Bandera para evitar colisiones de hilos en la sincronización
+let isSyncing = false;
 
-// Enviar un mensaje temporal que se borre a los 10 segundos para no saturar el canal
+// Enviar un mensaje temporal que se borre a los 10 segundos
 async function replyTemporarily(message, text) {
   try {
     const msg = await message.reply(text);
     setTimeout(() => {
       msg.delete().catch(() => {});
-    }, 10000); // 10 segundos
+    }, 10000);
   } catch (e) {
     console.error('Error al enviar mensaje temporal:', e);
   }
@@ -366,14 +366,27 @@ client.on('messageCreate', async (message) => {
     try {
       lastTextChannel = message.channel;
 
+      // Unirse forzando deafen falso y mute falso
       voiceConnection = joinVoiceChannel({
         channelId: member.voice.channel.id,
         guildId: message.guild.id,
         adapterCreator: message.guild.voiceAdapterCreator,
+        selfDeaf: false,
+        selfMute: false
+      });
+
+      // Monitorear cambios de estado de la conexión de voz
+      voiceConnection.on('stateChange', (oldState, newState) => {
+        console.log(`[CONEXIÓN DISCORD] Estado: ${oldState.status} -> ${newState.status}`);
       });
 
       audioPlayer = createAudioPlayer();
       voiceConnection.subscribe(audioPlayer);
+
+      // Monitorear cambios de estado del reproductor de audio
+      audioPlayer.on('stateChange', (oldState, newState) => {
+        console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
+      });
 
       audioPlayer.on('error', error => {
         console.error('Error controlado en el reproductor de audio:', error.message);
@@ -446,7 +459,7 @@ function stopSyncLoop() {
 }
 
 async function syncSpotifyPlayback(guildId) {
-  if (isSyncing) return; // Evitar que el siguiente ciclo entre si ya hay una carga en progreso
+  if (isSyncing) return;
 
   const token = await getValidAccessToken();
   if (!token || !audioPlayer) {
@@ -507,9 +520,9 @@ async function syncSpotifyPlayback(guildId) {
       const expectedProgress = lastSyncProgressMs + timeSinceLastSync;
       const drift = Math.abs(progressMs - expectedProgress);
 
-      // Si el desfase es real y mayor a 4.5 segundos, seek
-      if (drift > 4500) {
-        console.log(`Desfase detectado (${drift}ms). Ajustando reproducción de Discord al segundo: ${Math.round(progressMs / 1000)}s.`);
+      // Aumentado a 15 segundos para evitar micro-ajustes repetitivos que silencian el bot
+      if (drift > 15000) {
+        console.log(`Desfase mayor a 15s detectado (${drift}ms). Ajustando reproducción de Discord al segundo: ${Math.round(progressMs / 1000)}s.`);
         isSyncing = true;
         await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify);
         isSyncing = false;
@@ -575,7 +588,6 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
 
     console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds} (PCM Crudo)...`);
     
-    // Transmitir en formato PCM crudo de 16 bits estéreo a 48kHz
     activeFfmpegProcess = spawn(ffmpegPath, [
       '-ss', seekSeconds.toString(),
       '-i', directAudioUrl,
@@ -597,7 +609,6 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
       audioPlayer.pause();
     }
 
-    // Actualizar marcadores inmediatamente al comenzar a transmitir
     lastSyncProgressMs = progressMs;
     lastSyncTimestamp = Date.now();
   } catch (error) {
