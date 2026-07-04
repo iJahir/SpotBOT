@@ -313,15 +313,28 @@ let lastTextChannel = null;
 
 let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
+let isSyncing = false; // Bandera para evitar colisiones de hilos en la sincronización
+
+// Enviar un mensaje temporal que se borre a los 10 segundos para no saturar el canal
+async function replyTemporarily(message, text) {
+  try {
+    const msg = await message.reply(text);
+    setTimeout(() => {
+      msg.delete().catch(() => {});
+    }, 10000); // 10 segundos
+  } catch (e) {
+    console.error('Error al enviar mensaje temporal:', e);
+  }
+}
 
 client.on('ready', async () => {
   console.log(`Bot de Discord listo como: ${client.user.tag}`);
 
-  // Verificar si hay un estado guardado del canal para anunciar los cambios tras reiniciar
+  // Anuncio al regresar de cambios
   if (fs.existsSync(stateFilePath)) {
     try {
       const state = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
-      fs.unlinkSync(stateFilePath); // Limpiar archivo de estado
+      fs.unlinkSync(stateFilePath);
 
       if (state.channelId) {
         const channel = await client.channels.fetch(state.channelId);
@@ -329,7 +342,7 @@ client.on('ready', async () => {
           channel.send(`¡**He vuelto**! 🚀 He realizado los siguientes cambios en mi sistema:
 🛠️ **Sincronización robusta**: Implementada vía el extractor nativo \`yt-dlp.exe\` para evitar bloqueos y errores 403.
 🔊 **Audio activado**: Integrado el decodificador \`opusscript\` para resolver los problemas de silencio al cantar.
-⏱️ **Inactividad**: Me desconectaré automáticamente del canal de voz si pasas más de 2 minutos sin sonar música.
+⏱️ **Inactividad**: Me desconectará automáticamente del canal de voz si pasas más de 2 minutos sin sonar música.
 👋 **Apagado controlado**: Ahora me saldré del canal limpiamente y te avisaré si el host me apaga con \`Ctrl + C\`.`);
         }
       }
@@ -362,15 +375,14 @@ client.on('messageCreate', async (message) => {
       audioPlayer = createAudioPlayer();
       voiceConnection.subscribe(audioPlayer);
 
-      // Manejador de errores del reproductor de audio para evitar que el bot se caiga
       audioPlayer.on('error', error => {
         console.error('Error controlado en el reproductor de audio:', error.message);
       });
 
       if (spotifyAccessToken) {
-        message.reply(`¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.`);
+        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.`);
       } else {
-        message.reply(`¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo este enlace en tu navegador o escaneando el código QR de la consola: ${loginUrl}`);
+        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo este enlace en tu navegador o escaneando el código QR de la consola: ${loginUrl}`);
       }
 
       startSyncLoop(message.guild.id);
@@ -382,7 +394,7 @@ client.on('messageCreate', async (message) => {
 
   if (content === '!leaveS') {
     cleanupAndLeave();
-    message.reply('He salido del canal de voz y la sincronización se ha detenido.');
+    replyTemporarily(message, 'He salido del canal de voz y la sincronización se ha detenido.');
   }
 });
 
@@ -434,6 +446,8 @@ function stopSyncLoop() {
 }
 
 async function syncSpotifyPlayback(guildId) {
+  if (isSyncing) return; // Evitar que el siguiente ciclo entre si ya hay una carga en progreso
+
   const token = await getValidAccessToken();
   if (!token || !audioPlayer) {
     checkInactivity(guildId, false);
@@ -473,7 +487,9 @@ async function syncSpotifyPlayback(guildId) {
     if (trackId !== currentTrackId) {
       console.log(`Nueva canción detectada: "${trackName}" de ${artistName}`);
       currentTrackId = trackId;
+      isSyncing = true;
       await playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify);
+      isSyncing = false;
       return;
     }
 
@@ -491,9 +507,12 @@ async function syncSpotifyPlayback(guildId) {
       const expectedProgress = lastSyncProgressMs + timeSinceLastSync;
       const drift = Math.abs(progressMs - expectedProgress);
 
-      if (drift > 3500) {
+      // Si el desfase es real y mayor a 4.5 segundos, seek
+      if (drift > 4500) {
         console.log(`Desfase detectado (${drift}ms). Ajustando reproducción de Discord al segundo: ${Math.round(progressMs / 1000)}s.`);
+        isSyncing = true;
         await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify);
+        isSyncing = false;
       } else {
         lastSyncProgressMs = progressMs;
         lastSyncTimestamp = Date.now();
@@ -501,6 +520,7 @@ async function syncSpotifyPlayback(guildId) {
     }
   } catch (error) {
     console.error('Error al consultar la reproducción de Spotify:', error);
+    isSyncing = false;
   }
 }
 
@@ -577,6 +597,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
       audioPlayer.pause();
     }
 
+    // Actualizar marcadores inmediatamente al comenzar a transmitir
     lastSyncProgressMs = progressMs;
     lastSyncTimestamp = Date.now();
   } catch (error) {
@@ -592,10 +613,7 @@ const handleShutdown = async () => {
   
   if (lastTextChannel) {
     try {
-      // Guardar el estado del último canal de texto para recordar dónde anunciar los cambios al volver
       fs.writeFileSync(stateFilePath, JSON.stringify({ channelId: lastTextChannel.id }), 'utf8');
-      
-      // Enviar mensaje de despedida antes de apagar
       await lastTextChannel.send('⚠️ Me apagaré temporalmente porque mi desarrollador hará algunos ajustes. ¡Vuelvo enseguida!');
     } catch (e) {
       console.error('Error al guardar estado de salida:', e);
@@ -604,7 +622,6 @@ const handleShutdown = async () => {
   
   cleanupAndLeave();
   
-  // Esperar un segundo para garantizar el envío del mensaje en Discord antes de matar el proceso
   setTimeout(() => {
     process.exit(0);
   }, 1000);
