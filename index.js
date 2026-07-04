@@ -1,8 +1,13 @@
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
+import https from 'https';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import { exec, spawn } from 'child_process';
+import util from 'util';
+import ffmpegPath from 'ffmpeg-static';
 import { Client, GatewayIntentBits } from 'discord.js';
 import {
   joinVoiceChannel,
@@ -10,15 +15,18 @@ import {
   createAudioResource,
   AudioPlayerStatus,
   VoiceConnectionStatus,
-  getVoiceConnection
+  getVoiceConnection,
+  StreamType
 } from '@discordjs/voice';
 import play from 'play-dl';
 import qrcode from 'qrcode-terminal';
-import ytdl from '@distube/ytdl-core';
 
-// Obtener rutas absolutas para archivos estáticos
+const execPromise = util.promisify(exec);
+
+// Obtener rutas absolutas
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const ytDlpPath = path.join(__dirname, 'yt-dlp.exe');
 
 // Comprobar variables de entorno
 const {
@@ -35,6 +43,51 @@ const {
 if (!DISCORD_TOKEN || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SPOTIFY_REDIRECT_URI) {
   console.error('ERROR: Faltan variables de entorno esenciales en tu archivo .env.');
   process.exit(1);
+}
+
+// -------------------------------------------------------------
+// DESCARGA AUTOMÁTICA DE YT-DLP
+// -------------------------------------------------------------
+async function downloadYtDlp() {
+  if (fs.existsSync(ytDlpPath)) {
+    return ytDlpPath;
+  }
+  console.log('Descargando yt-dlp.exe para garantizar la transmisión de audio sin bloqueos...');
+  
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(ytDlpPath);
+    const download = (url) => {
+      https.get(url, (response) => {
+        if (response.statusCode === 302 || response.statusCode === 301) {
+          download(response.headers.location);
+          return;
+        }
+        response.pipe(file);
+        file.on('finish', () => {
+          file.close();
+          console.log('yt-dlp.exe descargado exitosamente.');
+          resolve(ytDlpPath);
+        });
+      }).on('error', (err) => {
+        fs.unlink(ytDlpPath, () => {});
+        reject(err);
+      });
+    };
+    download('https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe');
+  });
+}
+
+// -------------------------------------------------------------
+// EXTRAER ENLACE DIRECTO DE STREAM CON YT-DLP
+// -------------------------------------------------------------
+async function getDirectAudioUrl(youtubeUrl) {
+  try {
+    const { stdout } = await execPromise(`"${ytDlpPath}" -f bestaudio -g "${youtubeUrl}"`);
+    return stdout.trim();
+  } catch (error) {
+    console.error('Error al obtener URL directa con yt-dlp:', error);
+    throw error;
+  }
 }
 
 // -------------------------------------------------------------
@@ -82,12 +135,11 @@ async function getValidAccessToken() {
 }
 
 // -------------------------------------------------------------
-// SERVIDOR WEB EXPRESS (SERVIR HTML Y MANEJAR OAUTH/INTERACTIONS)
+// SERVIDOR WEB EXPRESS
 // -------------------------------------------------------------
 const app = express();
 const loginUrl = `http://127.0.0.1:${PORT}/login`;
 
-// Servir archivos estáticos de la carpeta /public
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/login', (req, res) => {
@@ -146,7 +198,6 @@ app.get('/callback', async (req, res) => {
   }
 });
 
-// Rutas explícitas para las páginas legales y verificación
 app.get('/terms', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'terms.html'));
 });
@@ -159,7 +210,6 @@ app.get('/linked-roles', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'linked-roles.html'));
 });
 
-// Endpoint de Interacciones de Discord
 app.post('/interactions', express.json({
   verify: (req, res, buf) => {
     req.rawBody = buf;
@@ -203,17 +253,22 @@ app.post('/interactions', express.json({
   return res.status(200).send('Interacción recibida.');
 });
 
-app.listen(PORT, () => {
-  console.log(`\n============================================================`);
-  console.log(`Servidor web activo para autenticación de Spotify y URLs de Discord.`);
-  console.log(`- Enlace de login (Spotify): ${loginUrl}`);
-  console.log(`- Términos de Servicio y Donaciones: http://localhost:${PORT}/terms`);
-  console.log(`- Política de Privacidad: http://localhost:${PORT}/privacy`);
-  console.log(`- Verificación de Roles: http://localhost:${PORT}/linked-roles`);
-  console.log(`- Endpoint de Interacciones: http://localhost:${PORT}/interactions`);
-  console.log(`============================================================\n`);
-  
-  qrcode.generate(loginUrl, { small: true });
+// Descargar yt-dlp e iniciar servidor Express
+downloadYtDlp().then(() => {
+  app.listen(PORT, () => {
+    console.log(`\n============================================================`);
+    console.log(`Servidor web activo para autenticación de Spotify y URLs de Discord.`);
+    console.log(`- Enlace de login (Spotify): ${loginUrl}`);
+    console.log(`- Términos de Servicio y Donaciones: http://localhost:${PORT}/terms`);
+    console.log(`- Política de Privacidad: http://localhost:${PORT}/privacy`);
+    console.log(`- Verificación de Roles: http://localhost:${PORT}/linked-roles`);
+    console.log(`- Endpoint de Interacciones: http://localhost:${PORT}/interactions`);
+    console.log(`============================================================\n`);
+    
+    qrcode.generate(loginUrl, { small: true });
+  });
+}).catch(err => {
+  console.error('Fallo crítico: No se pudo descargar yt-dlp.exe:', err);
 });
 
 // -------------------------------------------------------------
@@ -234,8 +289,11 @@ let currentTrackId = null;
 let lastSyncProgressMs = 0;
 let lastSyncTimestamp = 0;
 let syncIntervalId = null;
+let inactivityTimeoutId = null;
+let lastTextChannel = null;
 
 let currentYoutubeUrl = null;
+let activeFfmpegProcess = null;
 
 client.on('ready', () => {
   console.log(`Bot de Discord listo como: ${client.user.tag}`);
@@ -253,7 +311,8 @@ client.on('messageCreate', async (message) => {
     }
 
     try {
-      // Unirse al canal de voz inmediatamente
+      lastTextChannel = message.channel;
+
       voiceConnection = joinVoiceChannel({
         channelId: member.voice.channel.id,
         guildId: message.guild.id,
@@ -263,14 +322,18 @@ client.on('messageCreate', async (message) => {
       audioPlayer = createAudioPlayer();
       voiceConnection.subscribe(audioPlayer);
 
-      // Si Spotify ya está vinculado, iniciar sincronización
+      // Manejador de errores del reproductor de audio para evitar que el bot se caiga
+      audioPlayer.on('error', error => {
+        console.error('Error controlado en el reproductor de audio:', error.message);
+      });
+
       if (spotifyAccessToken) {
         message.reply(`¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.`);
       } else {
         message.reply(`¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo este enlace en tu navegador o escaneando el código QR de la consola: ${loginUrl}`);
       }
 
-      startSyncLoop();
+      startSyncLoop(message.guild.id);
     } catch (error) {
       console.error('Error al unirse al canal de voz:', error);
       message.reply('No pude unirme al canal de voz.');
@@ -278,27 +341,43 @@ client.on('messageCreate', async (message) => {
   }
 
   if (content === '!leaveS') {
-    stopSyncLoop();
-    const connection = getVoiceConnection(message.guild.id);
-    if (connection) {
-      connection.destroy();
-      voiceConnection = null;
-      audioPlayer = null;
-      currentTrackId = null;
-      message.reply('He salido del canal de voz y la sincronización se ha detenido.');
-    } else {
-      message.reply('No estoy en ningún canal de voz.');
-    }
+    cleanupAndLeave(message.guild.id);
+    message.reply('He salido del canal de voz y la sincronización se ha detenido.');
   }
 });
+
+function cleanupAndLeave(guildId) {
+  stopSyncLoop();
+  stopActiveFfmpeg();
+  if (inactivityTimeoutId) {
+    clearTimeout(inactivityTimeoutId);
+    inactivityTimeoutId = null;
+  }
+  const connection = getVoiceConnection(guildId);
+  if (connection) {
+    connection.destroy();
+  }
+  voiceConnection = null;
+  audioPlayer = null;
+  currentTrackId = null;
+}
+
+function stopActiveFfmpeg() {
+  if (activeFfmpegProcess) {
+    try {
+      activeFfmpegProcess.kill('SIGKILL');
+    } catch (e) {}
+    activeFfmpegProcess = null;
+  }
+}
 
 // -------------------------------------------------------------
 // BUCLE DE SINCRONIZACIÓN EN TIEMPO REAL CON SPOTIFY
 // -------------------------------------------------------------
-function startSyncLoop() {
+function startSyncLoop(guildId) {
   stopSyncLoop();
   console.log('Iniciando el bucle de sincronización con Spotify...');
-  syncIntervalId = setInterval(syncSpotifyPlayback, 3000);
+  syncIntervalId = setInterval(() => syncSpotifyPlayback(guildId), 3000);
 }
 
 function stopSyncLoop() {
@@ -309,11 +388,11 @@ function stopSyncLoop() {
   }
 }
 
-async function syncSpotifyPlayback() {
-  // Intentar obtener el token. Si el usuario aún no se ha logueado, reintentará en el próximo ciclo
+async function syncSpotifyPlayback(guildId) {
   const token = await getValidAccessToken();
   if (!token || !audioPlayer) {
-    // Si no hay token, no hacemos nada en este ciclo
+    // Si no hay token o no se ha unido al canal, verificamos inactividad
+    checkInactivity(guildId, false);
     return;
   }
 
@@ -329,17 +408,24 @@ async function syncSpotifyPlayback() {
         console.log('Spotify inactivo. Pausando reproducción en Discord.');
         audioPlayer.pause();
       }
+      checkInactivity(guildId, false);
       return;
     }
 
     const playback = await response.json();
-    if (!playback || !playback.item) return;
+    if (!playback || !playback.item) {
+      checkInactivity(guildId, false);
+      return;
+    }
 
     const trackId = playback.item.id;
     const isPlayingOnSpotify = playback.is_playing;
     const progressMs = playback.progress_ms;
     const trackName = playback.item.name;
     const artistName = playback.item.artists[0]?.name || '';
+
+    // Si Spotify está sonando, reseteamos la inactividad
+    checkInactivity(guildId, isPlayingOnSpotify);
 
     if (trackId !== currentTrackId) {
       console.log(`Nueva canción detectada: "${trackName}" de ${artistName}`);
@@ -375,6 +461,28 @@ async function syncSpotifyPlayback() {
   }
 }
 
+// Control de inactividad (desconexión a los 2 minutos)
+function checkInactivity(guildId, isPlaying) {
+  if (isPlaying) {
+    if (inactivityTimeoutId) {
+      console.log('Reproducción reanudada. Temporizador de inactividad cancelado.');
+      clearTimeout(inactivityTimeoutId);
+      inactivityTimeoutId = null;
+    }
+  } else {
+    if (!inactivityTimeoutId && voiceConnection) {
+      console.log('Inactividad detectada (Spotify pausado o inactivo). El bot se desconectará en 2 minutos si no se detecta música.');
+      inactivityTimeoutId = setTimeout(() => {
+        console.log('Desconectando del canal de voz por inactividad de 2 minutos.');
+        if (lastTextChannel) {
+          lastTextChannel.send('⚠️ Me he desconectado del canal de voz por inactividad (2 minutos sin reproducir música).');
+        }
+        cleanupAndLeave(guildId);
+      }, 120000); // 2 minutos
+    }
+  }
+}
+
 async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify) {
   try {
     const searchQuery = `${trackName} ${artistName} official audio`;
@@ -390,22 +498,35 @@ async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotif
     console.log(`Stream de YouTube encontrado: ${currentYoutubeUrl}`);
     await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify);
   } catch (error) {
-    console.error('Error al reproducir la nueva canción:', error);
+    console.error('Error al buscar la canción:', error);
   }
 }
 
 async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
   try {
-    const seekSeconds = Math.floor(progressMs / 1000);
-    console.log(`Transmitiendo desde YouTube a partir del segundo ${seekSeconds}...`);
+    stopActiveFfmpeg();
 
-    const stream = ytdl(url, {
-      filter: 'audioonly',
-      quality: 'highestaudio',
-      highWaterMark: 1 << 25,
-      begin: `${seekSeconds}s`
+    const seekSeconds = Math.floor(progressMs / 1000);
+    console.log(`Obteniendo flujo de audio directo de YouTube...`);
+    const directAudioUrl = await getDirectAudioUrl(url);
+
+    console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds}...`);
+    
+    // Iniciar FFmpeg para decodificar el audio directo en formato Ogg Opus compatible con Discord
+    activeFfmpegProcess = spawn(ffmpegPath, [
+      '-ss', seekSeconds.toString(),
+      '-i', directAudioUrl,
+      '-f', 'opus',
+      '-ar', '48000',
+      '-ac', '2',
+      'pipe:1'
+    ], {
+      stdio: ['ignore', 'pipe', 'ignore']
     });
-    const resource = createAudioResource(stream);
+
+    const resource = createAudioResource(activeFfmpegProcess.stdout, {
+      inputType: StreamType.OggOpus
+    });
     
     audioPlayer.play(resource);
     
@@ -416,7 +537,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     lastSyncProgressMs = progressMs;
     lastSyncTimestamp = Date.now();
   } catch (error) {
-    console.error('Error al transmitir el video de YouTube:', error);
+    console.error('Error al transmitir el audio:', error);
   }
 }
 
