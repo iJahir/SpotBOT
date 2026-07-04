@@ -162,15 +162,17 @@
       border: 1px solid var(--glass-border);
       margin-bottom: 24px;
       gap: 4px;
+      flex-wrap: wrap;
     }
 
     .tab-btn {
       flex: 1;
+      min-width: 90px;
       background: none;
       border: none;
       color: var(--text-muted);
       padding: 10px 0;
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 600;
       border-radius: 8px;
       cursor: pointer;
@@ -178,7 +180,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 4px;
     }
 
     .tab-btn.active {
@@ -634,6 +636,37 @@
       word-break: break-word;
     }
 
+    /* Autocomplete pings de menciones rápidas */
+    .mention-helper-container {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 8px;
+      max-height: 90px;
+      overflow-y: auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .mention-badge {
+      background: rgba(29, 185, 84, 0.15);
+      border: 1px solid rgba(29, 185, 84, 0.3);
+      color: #6eff95;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .mention-badge:hover {
+      background: var(--primary);
+      color: white;
+    }
+
     /* CONSOLA */
     .terminal-container {
       width: 100%;
@@ -656,6 +689,37 @@
       line-height: 1.4;
       box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
       margin-bottom: 12px;
+    }
+
+    /* HISTORIAL LOG FILE VIEW */
+    .log-file-viewer {
+      width: 100%;
+      height: 280px;
+      background: #050508;
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 12px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.7rem;
+      color: #ff6666;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      margin-bottom: 12px;
+    }
+
+    .btn-danger {
+      background: #ff3333;
+      border: none;
+      color: white;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-weight: 600;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    .btn-danger:hover {
+      opacity: 0.9;
     }
 
     .errors-legend {
@@ -718,6 +782,7 @@
         <button class="tab-btn active" onclick="switchTab('reproductor')">🎵 Música</button>
         <button class="tab-btn" onclick="switchTab('chat')">💬 Discord Chat</button>
         <button class="tab-btn" onclick="switchTab('consola')">📟 Terminal</button>
+        <button class="tab-btn" onclick="switchTab('historial')">📋 Historial Log</button>
       </div>
 
       <!-- PESTAÑA 1: REPRODUCTOR -->
@@ -822,9 +887,15 @@
             <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px;">Selecciona un canal para cargar mensajes</div>
           </div>
 
-          <label class="control-label">Responder (Menciones permitidas, e.g. @Usuario)</label>
+          <!-- Menciones Rápidas -->
+          <label class="control-label">Mencionar a:</label>
+          <div class="mention-helper-container" id="mentionHelperList">
+            <div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">Elige un canal para cargar miembros...</div>
+          </div>
+
+          <label class="control-label">Mensaje</label>
           <div class="chat-input-wrapper">
-            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe tu mensaje o mención..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <input type="text" class="chat-input" id="realChatInput" placeholder="Escribe tu mensaje o haz clic en un usuario..." onkeydown="if(event.key==='Enter') sendMessage()">
             <button class="btn-send" onclick="sendMessage()">Mandar</button>
           </div>
         </div>
@@ -833,9 +904,22 @@
       <!-- PESTAÑA 3: CONSOLA DE SISTEMA -->
       <div id="tab-consola" class="tab-content">
         <div class="terminal-container">
-          <span class="control-label">Logs y Errores (Tiempo Real)</span>
+          <span class="control-label">Logs en Tiempo Real (Consola Activa)</span>
           <div class="terminal-screen" id="terminalScreen">Cargando consola del bot...</div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 4: ARCHIVO LOG Y ERRORES -->
+      <div id="tab-historial" class="tab-content">
+        <div class="terminal-container" style="width: 100%;">
+          <span class="control-label">Historial del archivo de Logs y Errores (bot.log)</span>
+          <div class="log-file-viewer" id="logFileViewer">Cargando historial de log...</div>
           
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+            <button class="btn-danger" onclick="clearLogFile()">Limpiar Logs</button>
+            <button class="btn-send" style="background: #00ccff;" onclick="loadLogFile()">Actualizar</button>
+          </div>
+
           <div class="errors-legend">
             <div class="errors-legend-title">📚 Leyenda de Errores:</div>
             • <b>ERR-01</b>: Pérdida de red con YouTube (auto-reconexión iniciada).<br>
@@ -895,10 +979,14 @@
       if (tabId === 'consola') {
         loadLogs();
       }
+
+      if (tabId === 'historial') {
+        loadLogFile();
+      }
     }
 
     // -----------------------------------------------------------
-    // FUNCIONES DEL REPRODUCTOR Y ESTADO GENERAL
+    // REPRODUCTOR
     // -----------------------------------------------------------
     async function updateState() {
       try {
@@ -906,7 +994,7 @@
         if (!res.ok) return;
         const data = await res.json();
 
-        // Barra de estado global
+        // Barra de estado
         document.getElementById('statusServers').innerText = `Servidores: ${data.guildCount}`;
         const voicePill = document.getElementById('statusVoice');
         if (data.voiceConnected) {
@@ -1133,7 +1221,7 @@
     }
 
     // -----------------------------------------------------------
-    // CHAT DISCORD CON BURBUJAS Y SELECTOR AGRUPADO
+    // CHAT DISCORD Y MENCIONES RÁPIDAS
     // -----------------------------------------------------------
     async function loadChannels() {
       try {
@@ -1142,7 +1230,6 @@
         const select = document.getElementById('channelSelect');
         select.innerHTML = '<option value="">-- Elige un canal de texto --</option>';
         
-        // Agrupar canales por servidor (Guild)
         const guilds = {};
         channels.forEach(ch => {
           if (!guilds[ch.guildName]) {
@@ -1175,14 +1262,47 @@
       currentChannelId = channelId;
       if (!channelId) {
         document.getElementById('messagesViewer').innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px;">Selecciona un canal para cargar mensajes</div>';
+        document.getElementById('mentionHelperList').innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">Elige un canal para cargar miembros...</div>';
         clearInterval(chatRefreshInterval);
         chatRefreshInterval = null;
         return;
       }
       
       loadMessages();
+      loadChannelMembers();
+      
       clearInterval(chatRefreshInterval);
       chatRefreshInterval = setInterval(loadMessages, 4000);
+    }
+
+    async function loadChannelMembers() {
+      if (!currentChannelId) return;
+      try {
+        const res = await fetch(`/api/channels/${currentChannelId}/members`);
+        const members = await res.json();
+        const listContainer = document.getElementById('mentionHelperList');
+        
+        listContainer.innerHTML = '';
+        if (members.length === 0) {
+          listContainer.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">No hay miembros o no se pudieron cargar</div>';
+          return;
+        }
+
+        members.forEach(member => {
+          const badge = document.createElement('span');
+          badge.className = 'mention-badge';
+          badge.innerText = `@${member.displayName}`;
+          badge.onclick = () => {
+            const chatInput = document.getElementById('realChatInput');
+            // Insertar la mención de texto en el input
+            chatInput.value += ` @${member.username} `;
+            chatInput.focus();
+          };
+          listContainer.appendChild(badge);
+        });
+      } catch (e) {
+        console.error('Error al cargar miembros del canal:', e);
+      }
     }
 
     async function loadMessages() {
@@ -1219,7 +1339,7 @@
     }
 
     async function sendMessage() {
-      const input = document.getElementById('chatInput');
+      const input = document.getElementById('realChatInput');
       const text = input.value.trim();
       if (!text || !currentChannelId) return;
 
@@ -1241,7 +1361,7 @@
     }
 
     // -----------------------------------------------------------
-    // TERMINAL Y LOGS
+    // TERMINAL Y LOGS (HISTORIAL)
     // -----------------------------------------------------------
     async function loadLogs() {
       if (activeTab !== 'consola') return;
@@ -1253,6 +1373,32 @@
         terminal.scrollTop = terminal.scrollHeight;
       } catch (e) {
         console.error('Error al cargar logs:', e);
+      }
+    }
+
+    async function loadLogFile() {
+      if (activeTab !== 'historial') return;
+      try {
+        const res = await fetch('/api/log-file');
+        const content = await res.text();
+        const viewer = document.getElementById('logFileViewer');
+        viewer.innerText = content;
+        viewer.scrollTop = viewer.scrollHeight;
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function clearLogFile() {
+      if (!confirm('¿Estás seguro de que quieres vaciar el historial de logs de errores?')) return;
+      try {
+        const res = await fetch('/api/log-file/clear', { method: 'POST' });
+        if (res.ok) {
+          showToast('Historial de logs limpiado.');
+          loadLogFile();
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
 

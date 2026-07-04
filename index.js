@@ -459,7 +459,6 @@ app.post('/api/message', async (req, res) => {
     if (channel) {
       let parsedMessage = message;
 
-      // Buscar nombres y nicknames con búsqueda activa en el servidor de Discord
       if (channel.guild) {
         try {
           const mentionRegex = /@([a-zA-Z0-9_\-\.]+)/g;
@@ -469,7 +468,6 @@ app.post('/api/message', async (req, res) => {
             const fullMatch = m[0]; // e.g. "@TheAngel07"
             const username = m[1].toLowerCase();
             
-            // Buscar activamente el nombre usando la API de Discord (no depende de intents de miembros)
             const searchResults = await channel.guild.members.search({ query: username, limit: 5 });
             
             const member = searchResults.find(mbr => 
@@ -594,6 +592,50 @@ app.get('/api/channels/:id/messages', async (req, res) => {
       isMe: msg.author.id === client.user.id
     })).reverse();
     res.json(formatted);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Obtener los miembros del servidor de un canal específico
+app.get('/api/channels/:id/members', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const channel = await client.channels.fetch(id);
+    if (!channel || !channel.guild) {
+      return res.json([]);
+    }
+    // Fetch para asegurar que estén cargados
+    const members = await channel.guild.members.fetch({ limit: 100 });
+    const formatted = members.map(m => ({
+      username: m.user.username,
+      displayName: m.displayName
+    }));
+    res.json(formatted);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para leer archivo bot.log
+app.get('/api/log-file', (req, res) => {
+  try {
+    if (fs.existsSync(logFilePath)) {
+      const content = fs.readFileSync(logFilePath, 'utf8');
+      return res.send(content);
+    }
+    res.send('El archivo bot.log está vacío.');
+  } catch (e) {
+    res.status(500).send('Error al leer log: ' + e.message);
+  }
+});
+
+// Endpoint para vaciar archivo bot.log
+app.post('/api/log-file/clear', (req, res) => {
+  try {
+    fs.writeFileSync(logFilePath, '', 'utf8');
+    systemLogs = [];
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -746,7 +788,7 @@ client.on('messageCreate', async (message) => {
 
   if (content === '!joinS') {
     const member = message.member;
-    if (!member.voice.channel) {
+    if (!message.member.voice.channel) {
       return message.reply('Debes estar en un canal de voz para usar este comando.');
     }
 
@@ -958,7 +1000,6 @@ async function syncSpotifyPlayback(guildId) {
 
     if (isPlayingOnSpotify) {
       const timeSinceLastSync = Date.now() - lastSyncTimestamp;
-      const { encodeURIComponent } = globalThis;
       const expectedProgress = lastSyncProgressMs + Math.round(timeSinceLastSync * currentSpeed);
       const drift = Math.abs(progressMs - expectedProgress);
 
