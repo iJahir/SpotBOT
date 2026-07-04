@@ -29,6 +29,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ytDlpPath = path.join(__dirname, 'yt-dlp.exe');
 const stateFilePath = path.join(__dirname, '.bot_state.json');
+const logFilePath = path.join(__dirname, 'bot.log');
 
 // Comprobar variables de entorno
 const {
@@ -46,6 +47,45 @@ if (!DISCORD_TOKEN || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SPOTIFY_R
   console.error('ERROR: Faltan variables de entorno esenciales en tu archivo .env.');
   process.exit(1);
 }
+
+// -------------------------------------------------------------
+// SISTEMA DE LOGS Y CONSOLA EN TIEMPO REAL
+// -------------------------------------------------------------
+let systemLogs = [];
+
+function writeToLogFile(type, message) {
+  const timestamp = new Date().toLocaleTimeString();
+  const logLine = `[${timestamp}] [${type}] ${message}`;
+  
+  // Guardar en memoria (últimos 50 logs)
+  systemLogs.push(logLine);
+  if (systemLogs.length > 50) {
+    systemLogs.shift();
+  }
+
+  // Guardar en archivo bot.log
+  try {
+    fs.appendFileSync(logFilePath, logLine + '\n', 'utf8');
+  } catch (err) {
+    // Si falla la escritura en archivo, ignoramos para no tirar el bot
+  }
+}
+
+// Interceptores globales para capturar todo a la consola de la web
+const originalConsoleLog = console.log;
+const originalConsoleError = console.error;
+
+console.log = (...args) => {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  originalConsoleLog(...args);
+  writeToLogFile('INFO', msg);
+};
+
+console.error = (...args) => {
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+  originalConsoleError(...args);
+  writeToLogFile('ERROR', msg);
+};
 
 // -------------------------------------------------------------
 // OBTENER IP LOCAL DE LA RED PARA EL QR MÓVIL
@@ -335,24 +375,85 @@ app.post('/api/play-pause', async (req, res) => {
   }
 });
 
+// Controles Saltar Canción de Spotify
+app.post('/api/next', async (req, res) => {
+  const token = await getValidAccessToken();
+  if (!token) return res.status(401).json({ error: 'No autenticado.' });
+  try {
+    const response = await fetch('https://api.spotify.com/v1/me/player/next', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.ok || response.status === 204) {
+      return res.json({ success: true });
+    }
+    res.status(response.status).json({ error: 'Error al saltar' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/api/previous', async (req, res) => {
+  const token = await getValidAccessToken();
+  if (!token) return res.status(401).json({ error: 'No autenticado.' });
+  try {
+    const response = await fetch('https://api.spotify.com/v1/me/player/previous', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.ok || response.status === 204) {
+      return res.json({ success: true });
+    }
+    res.status(response.status).json({ error: 'Error al retroceder' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Reproducir una canción específica inmediatamente
+app.post('/api/play-track', async (req, res) => {
+  const { uri } = req.body;
+  const token = await getValidAccessToken();
+  if (!token) return res.status(401).json({ error: 'No autenticado.' });
+  try {
+    const response = await fetch('https://api.spotify.com/v1/me/player/play', {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ uris: [uri] })
+    });
+    if (response.ok || response.status === 204) {
+      return res.json({ success: true });
+    }
+    res.status(response.status).json({ error: 'Error al reproducir track' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Enviar mensajes al canal sin pings ni menciones
 app.post('/api/message', async (req, res) => {
-  const { message } = req.body;
+  const { message, channelId } = req.body;
   if (!message) return res.status(400).json({ error: 'Mensaje vacío.' });
 
-  if (lastTextChannel) {
-    try {
-      // allowedMentions: { parse: [] } bloquea menciones de roles, usuarios y @everyone/@here
-      await lastTextChannel.send({
+  const targetChannelId = channelId || (lastTextChannel ? lastTextChannel.id : null);
+  if (!targetChannelId) {
+    return res.status(400).json({ error: 'No se especificó canal de destino.' });
+  }
+
+  try {
+    const channel = await client.channels.fetch(targetChannelId);
+    if (channel) {
+      await channel.send({
         content: `**Panel**: ${message}`,
         allowedMentions: { parse: [] }
       });
+      lastTextChannel = channel;
       return res.json({ success: true });
-    } catch (e) {
-      return res.status(500).json({ error: e.message });
     }
+    res.status(404).json({ error: 'Canal no encontrado.' });
+  } catch (e) {
+    return res.status(500).json({ error: e.message });
   }
-  res.status(400).json({ error: 'El bot no se ha unido a ningún canal de texto aún.' });
 });
 
 // Buscador de canciones en Spotify
@@ -403,6 +504,55 @@ app.post('/api/queue', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// Obtener todos los canales de texto de Discord del bot
+app.get('/api/channels', async (req, res) => {
+  try {
+    const channelsList = [];
+    for (const [guildId, guild] of client.guilds.cache) {
+      const guildChannels = await guild.channels.fetch();
+      for (const [channelId, channel] of guildChannels) {
+        // channel.type === 0 es canal de texto normal
+        if (channel.type === 0) {
+          channelsList.push({
+            id: channel.id,
+            name: channel.name,
+            guildName: guild.name
+          });
+        }
+      }
+    }
+    res.json(channelsList);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Obtener mensajes de un canal
+app.get('/api/channels/:id/messages', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const channel = await client.channels.fetch(id);
+    if (!channel || channel.type !== 0) {
+      return res.status(404).json({ error: 'Canal de texto no encontrado.' });
+    }
+    const messages = await channel.messages.fetch({ limit: 15 });
+    const formatted = messages.map(msg => ({
+      id: msg.id,
+      author: msg.author.username,
+      content: msg.content,
+      timestamp: msg.createdAt
+    })).reverse();
+    res.json(formatted);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint de Logs en vivo
+app.get('/api/logs', (req, res) => {
+  res.json(systemLogs);
 });
 
 app.get('/terms', (req, res) => {
@@ -577,7 +727,6 @@ client.on('messageCreate', async (message) => {
         console.error('Error controlado en el reproductor de audio:', error.message);
       });
 
-      // No mostramos la IP local del usuario en Discord
       if (spotifyAccessToken) {
         replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.\nPuedes abrir el panel de control en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración.`);
       } else {
@@ -697,7 +846,8 @@ async function syncSpotifyPlayback(guildId) {
           queueList = queueData.queue.slice(0, 5).map(item => ({
             title: item.name,
             artist: item.artists.map(a => a.name).join(', '),
-            coverUrl: item.album.images[0]?.url || ''
+            coverUrl: item.album.images[0]?.url || '',
+            uri: item.uri
           }));
         }
       }

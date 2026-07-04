@@ -14,6 +14,7 @@
       --glass-border: rgba(255, 255, 255, 0.08);
       --text: #ffffff;
       --text-muted: rgba(255, 255, 255, 0.6);
+      --terminal-bg: rgba(0, 0, 0, 0.4);
     }
 
     * {
@@ -41,7 +42,7 @@
       width: 400px;
       height: 400px;
       border-radius: 50%;
-      background: radial-gradient(circle, rgba(29, 185, 84, 0.2) 0%, transparent 70%);
+      background: radial-gradient(circle, rgba(29, 185, 84, 0.15) 0%, transparent 70%);
       z-index: 1;
       filter: blur(50px);
       animation: float 20s ease-in-out infinite alternate;
@@ -57,7 +58,7 @@
 
     .container {
       width: 100%;
-      max-width: 480px;
+      max-width: 520px;
       padding: 20px;
       z-index: 2;
     }
@@ -69,12 +70,11 @@
       backdrop-filter: blur(25px);
       -webkit-backdrop-filter: blur(25px);
       border-radius: 24px;
-      padding: 30px 24px;
+      padding: 28px 20px;
       box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
       display: flex;
       flex-direction: column;
       align-items: center;
-      text-align: center;
     }
 
     header h1 {
@@ -85,22 +85,68 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
 
     header h1 span {
       color: var(--primary);
     }
 
+    /* Tabs System */
+    .tabs-nav {
+      display: flex;
+      width: 100%;
+      background: rgba(255,255,255,0.04);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border);
+      margin-bottom: 24px;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 0;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .tab-btn.active {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3);
+    }
+
+    .tab-content {
+      width: 100%;
+      display: none;
+    }
+
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
     /* Cover Album Artwork */
     .album-art-container {
       position: relative;
-      width: 200px;
-      height: 200px;
+      width: 180px;
+      height: 180px;
       border-radius: 18px;
       overflow: hidden;
-      margin-bottom: 20px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      margin-bottom: 18px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
       border: 1px solid rgba(255,255,255,0.1);
     }
 
@@ -122,7 +168,7 @@
 
     /* Song Info */
     .song-title {
-      font-size: 1.25rem;
+      font-size: 1.2rem;
       font-weight: 700;
       margin-bottom: 6px;
       color: var(--text);
@@ -130,22 +176,24 @@
       overflow: hidden;
       text-overflow: ellipsis;
       width: 100%;
+      text-align: center;
     }
 
     .song-artist {
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       color: var(--text-muted);
-      margin-bottom: 20px;
+      margin-bottom: 18px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       width: 100%;
+      text-align: center;
     }
 
     /* Custom Progress Bar */
     .progress-container {
       width: 100%;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
     }
 
     .progress-bar-bg {
@@ -178,8 +226,9 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 28px;
-      margin-bottom: 24px;
+      gap: 16px;
+      margin-bottom: 20px;
+      width: 100%;
     }
 
     .btn-ctrl {
@@ -203,8 +252,8 @@
     }
 
     .btn-play-pause {
-      width: 56px;
-      height: 56px;
+      width: 52px;
+      height: 52px;
       background: var(--text);
       color: #0f0f1a;
       border-radius: 50%;
@@ -218,26 +267,26 @@
     }
 
     .btn-play-pause svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    .btn-seek-side svg, .btn-skip svg {
       width: 24px;
       height: 24px;
       fill: currentColor;
     }
 
-    .btn-seek-side svg {
-      width: 28px;
-      height: 28px;
-      fill: currentColor;
-    }
-
-    /* Speed Controls */
+    /* Speed and Volume Control Row */
     .control-row {
       width: 100%;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
       text-align: left;
     }
 
     .control-label {
-      font-size: 0.8rem;
+      font-size: 0.75rem;
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 1px;
@@ -260,8 +309,8 @@
       background: none;
       border: none;
       color: var(--text-muted);
-      padding: 8px;
-      font-size: 0.85rem;
+      padding: 6px;
+      font-size: 0.8rem;
       font-weight: 600;
       border-radius: 8px;
       cursor: pointer;
@@ -271,10 +320,8 @@
     .btn-speed.active {
       background: var(--primary);
       color: #ffffff;
-      box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3);
     }
 
-    /* Volume Slider */
     .volume-container {
       display: flex;
       align-items: center;
@@ -282,22 +329,21 @@
       width: 100%;
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--glass-border);
-      padding: 10px 14px;
-      border-radius: 16px;
-      margin-bottom: 20px;
+      padding: 8px 12px;
+      border-radius: 14px;
     }
 
     .volume-container svg {
-      width: 20px;
-      height: 20px;
+      width: 18px;
+      height: 18px;
       fill: var(--text-muted);
     }
 
     .volume-slider {
       flex: 1;
       -webkit-appearance: none;
-      height: 6px;
-      border-radius: 3px;
+      height: 4px;
+      border-radius: 2px;
       background: rgba(255,255,255,0.1);
       outline: none;
       cursor: pointer;
@@ -305,30 +351,30 @@
 
     .volume-slider::-webkit-slider-thumb {
       -webkit-appearance: none;
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
       border-radius: 50%;
       background: var(--primary);
     }
 
-    /* Discord Chat box */
-    .chat-container {
+    /* Buscador */
+    .search-container {
       width: 100%;
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--glass-border);
       padding: 12px;
       border-radius: 16px;
-      margin-bottom: 20px;
+      margin-bottom: 16px;
     }
 
-    .chat-input-wrapper {
+    .search-input-wrapper {
       display: flex;
       gap: 8px;
     }
 
     .chat-input {
       flex: 1;
-      background: rgba(0,0,0,0.2);
+      background: rgba(0,0,0,0.25);
       border: 1px solid var(--glass-border);
       border-radius: 10px;
       padding: 8px 12px;
@@ -342,46 +388,35 @@
       border: none;
       border-radius: 10px;
       color: #fff;
-      padding: 0 16px;
+      padding: 0 14px;
       cursor: pointer;
       font-weight: 600;
-      font-size: 0.85rem;
-    }
-
-    /* BUSCADOR DE MÚSICA */
-    .search-container {
-      width: 100%;
-      background: rgba(255,255,255,0.03);
-      border: 1px solid var(--glass-border);
-      padding: 14px;
-      border-radius: 18px;
-      margin-bottom: 20px;
+      font-size: 0.8rem;
     }
 
     .search-results {
       margin-top: 10px;
-      max-height: 200px;
+      max-height: 160px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     .search-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      background: rgba(255,255,255,0.04);
-      padding: 8px;
-      border-radius: 10px;
-      border: 1px solid transparent;
+      gap: 8px;
+      background: rgba(255,255,255,0.03);
+      padding: 6px;
+      border-radius: 8px;
       text-align: left;
     }
 
     .search-item img {
-      width: 40px;
-      height: 40px;
-      border-radius: 6px;
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
       object-fit: cover;
     }
 
@@ -391,7 +426,7 @@
     }
 
     .search-item-title {
-      font-size: 0.85rem;
+      font-size: 0.8rem;
       font-weight: 600;
       white-space: nowrap;
       overflow: hidden;
@@ -399,57 +434,80 @@
     }
 
     .search-item-artist {
-      font-size: 0.75rem;
+      font-size: 0.7rem;
       color: var(--text-muted);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
 
-    .btn-add-queue {
-      background: rgba(29, 185, 84, 0.2);
-      border: 1px solid var(--primary);
-      color: var(--primary);
-      border-radius: 6px;
-      padding: 4px 10px;
-      font-size: 0.75rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: background 0.2s, color 0.2s;
+    .search-actions {
+      display: flex;
+      gap: 4px;
     }
 
-    .btn-add-queue:hover {
+    .btn-action-music {
+      border: none;
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-add-q {
+      background: rgba(255,255,255,0.08);
+      color: white;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .btn-add-q:hover {
+      background: rgba(255,255,255,0.15);
+    }
+
+    .btn-play-now {
+      background: rgba(29, 185, 84, 0.2);
+      color: var(--primary);
+      border: 1px solid var(--primary);
+    }
+
+    .btn-play-now:hover {
       background: var(--primary);
       color: white;
     }
 
-    /* LISTA DE COLA */
+    /* Queue Container */
     .queue-container {
       width: 100%;
       background: rgba(255,255,255,0.03);
       border: 1px solid var(--glass-border);
-      padding: 14px;
-      border-radius: 18px;
+      padding: 12px;
+      border-radius: 16px;
       text-align: left;
     }
 
     .queue-list {
-      margin-top: 10px;
+      margin-top: 8px;
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 6px;
     }
 
     .queue-item {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 6px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
+      gap: 8px;
+      padding: 6px;
+      background: rgba(255,255,255,0.02);
+      border-radius: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: background 0.2s, border-color 0.2s;
     }
 
-    .queue-item:last-child {
-      border-bottom: none;
+    .queue-item:hover {
+      background: rgba(29, 185, 84, 0.08);
+      border-color: rgba(29, 185, 84, 0.25);
     }
 
     .queue-item img {
@@ -457,6 +515,82 @@
       height: 32px;
       border-radius: 4px;
       object-fit: cover;
+    }
+
+    /* INTEGRACIÓN DE CHAT DISCORD */
+    .discord-chat-layout {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      text-align: left;
+    }
+
+    .channel-select-wrapper {
+      width: 100%;
+    }
+
+    .channel-select {
+      width: 100%;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 10px;
+      color: white;
+      font-size: 0.85rem;
+      outline: none;
+    }
+
+    .messages-viewer {
+      width: 100%;
+      height: 250px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 12px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .chat-msg {
+      font-size: 0.8rem;
+      line-height: 1.3;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.02);
+    }
+
+    .chat-msg-author {
+      font-weight: 700;
+      color: var(--primary);
+      margin-right: 6px;
+    }
+
+    .chat-msg-content {
+      color: rgba(255,255,255,0.9);
+    }
+
+    /* CONSOLA DE REGISTROS (LOGS) */
+    .terminal-container {
+      width: 100%;
+      text-align: left;
+    }
+
+    .terminal-screen {
+      width: 100%;
+      height: 320px;
+      background: var(--terminal-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 14px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.75rem;
+      color: #00ff66;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      line-height: 1.4;
+      box-shadow: inset 0 0 10px rgba(0,0,0,0.8);
     }
 
     /* Toast */
@@ -472,7 +606,7 @@
       opacity: 0;
       transform: translateY(20px);
       transition: opacity 0.3s ease, transform 0.3s ease;
-      z-index: 10;
+      z-index: 100;
     }
 
     .toast.show {
@@ -491,90 +625,133 @@
         <h1>Spot<span>BOT</span> Panel</h1>
       </header>
 
-      <!-- Portada -->
-      <div class="album-art-container">
-        <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500" alt="Portada" class="album-art" id="albumArt">
+      <!-- Pestañas de Navegación -->
+      <div class="tabs-nav">
+        <button class="tab-btn active" onclick="switchTab('reproductor')">🎵 Música</button>
+        <button class="tab-btn" onclick="switchTab('chat')">💬 Discord Chat</button>
+        <button class="tab-btn" onclick="switchTab('consola')">📟 Terminal</button>
       </div>
 
-      <!-- Detalle de canción -->
-      <div class="song-title" id="songTitle">Esperando reproducción...</div>
-      <div class="song-artist" id="songArtist">Conecta Spotify e inicia el bot</div>
-
-      <!-- Barra de progreso -->
-      <div class="progress-container">
-        <div class="progress-bar-bg" id="progressBarBg">
-          <div class="progress-bar-fill" id="progressBarFill"></div>
+      <!-- PESTAÑA 1: REPRODUCTOR -->
+      <div id="tab-reproductor" class="tab-content active">
+        <!-- Portada -->
+        <div class="album-art-container">
+          <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500" alt="Portada" class="album-art" id="albumArt">
         </div>
-        <div class="progress-time">
-          <span id="currentTime">0:00</span>
-          <span id="totalTime">0:00</span>
-        </div>
-      </div>
 
-      <!-- Controles multimedia -->
-      <div class="media-controls">
-        <button class="btn-ctrl btn-seek-side" onclick="seek(-30)" title="Retroceder 30s">
-          <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.63 7.82h-.99v2.24H8.36v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
+        <!-- Info canción -->
+        <div class="song-title" id="songTitle">Esperando reproducción...</div>
+        <div class="song-artist" id="songArtist">Conecta Spotify e inicia el bot</div>
+
+        <!-- Barra de progreso -->
+        <div class="progress-container">
+          <div class="progress-bar-bg" id="progressBarBg">
+            <div class="progress-bar-fill" id="progressBarFill"></div>
+          </div>
+          <div class="progress-time">
+            <span id="currentTime">0:00</span>
+            <span id="totalTime">0:00</span>
+          </div>
+        </div>
+
+        <!-- Controles Multimedia completos -->
+        <div class="media-controls">
+          <!-- Anterior -->
+          <button class="btn-ctrl btn-skip" onclick="spotifyPrevious()" title="Canción anterior">
+            <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
+          </button>
+
+          <!-- Retroceder 30s -->
+          <button class="btn-ctrl btn-seek-side" onclick="seek(-30)" title="-30 segundos">
+            <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.63 7.82h-.99v2.24H8.36v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
         </button>
 
-        <button class="btn-ctrl btn-play-pause" onclick="togglePlayPause()" id="btnPlayPause">
-          <svg viewBox="0 0 24 24" id="svgPlayPause"><path d="M8 5v14l11-7z"/></svg>
-        </button>
+          <!-- Play/Pause -->
+          <button class="btn-ctrl btn-play-pause" onclick="togglePlayPause()" id="btnPlayPause">
+            <svg viewBox="0 0 24 24" id="svgPlayPause"><path d="M8 5v14l11-7z"/></svg>
+          </button>
 
-        <button class="btn-ctrl btn-seek-side" onclick="seek(30)" title="Adelantar 30s">
-          <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm1.63 7.82h-.99v2.24H11.72v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
-        </button>
-      </div>
+          <!-- Adelantar 30s -->
+          <button class="btn-ctrl btn-seek-side" onclick="seek(30)" title="+30 segundos">
+            <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm1.63 7.82h-.99v2.24H11.72v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
+          </button>
 
-      <!-- Velocidad -->
-      <div class="control-row">
-        <span class="control-label">Velocidad</span>
-        <div class="speed-btn-group">
-          <button class="btn-speed active" id="speed-1" onclick="setSpeed(1.0)">x1.0</button>
-          <button class="btn-speed" id="speed-1_5" onclick="setSpeed(1.5)">x1.5</button>
-          <button class="btn-speed" id="speed-2" onclick="setSpeed(2.0)">x2.0</button>
+          <!-- Siguiente -->
+          <button class="btn-ctrl btn-skip" onclick="spotifyNext()" title="Siguiente canción">
+            <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
+          </button>
+        </div>
+
+        <!-- Velocidad -->
+        <div class="control-row">
+          <span class="control-label">Velocidad</span>
+          <div class="speed-btn-group">
+            <button class="btn-speed active" id="speed-1" onclick="setSpeed(1.0)">x1.0</button>
+            <button class="btn-speed" id="speed-1_5" onclick="setSpeed(1.5)">x1.5</button>
+            <button class="btn-speed" id="speed-2" onclick="setSpeed(2.0)">x2.0</button>
+          </div>
+        </div>
+
+        <!-- Volumen -->
+        <div class="control-row">
+          <span class="control-label">Volumen Bot</span>
+          <div class="volume-container">
+            <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" oninput="changeVolume(this.value)">
+          </div>
+        </div>
+
+        <!-- Buscador -->
+        <div class="control-row">
+          <span class="control-label">Buscar y Añadir / Reproducir</span>
+          <div class="search-container">
+            <div class="search-input-wrapper">
+              <input type="text" class="chat-input" id="searchInput" placeholder="Buscar canción en Spotify..." onkeydown="if(event.key==='Enter') searchMusic()">
+              <button class="btn-send" onclick="searchMusic()">Buscar</button>
+            </div>
+            <div class="search-results" id="searchResults"></div>
+          </div>
+        </div>
+
+        <!-- Cola -->
+        <div class="control-row">
+          <span class="control-label">Siguientes en la cola (Haz clic para reproducir ahora)</span>
+          <div class="queue-container">
+            <div class="queue-list" id="queueList">
+              <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">No hay canciones en cola</div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Volumen -->
-      <div class="control-row">
-        <span class="control-label">Volumen Bot</span>
-        <div class="volume-container">
-          <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
-          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" oninput="changeVolume(this.value)">
-        </div>
-      </div>
+      <!-- PESTAÑA 2: CHAT DISCORD -->
+      <div id="tab-chat" class="tab-content">
+        <div class="discord-chat-layout">
+          <div class="channel-select-wrapper">
+            <label class="control-label">Seleccionar Canal de Texto</label>
+            <select class="channel-select" id="channelSelect" onchange="onChannelChanged(this.value)">
+              <option value="">Cargando canales...</option>
+            </select>
+          </div>
 
-      <!-- Enviar a Discord -->
-      <div class="control-row">
-        <span class="control-label">Enviar mensaje a Discord</span>
-        <div class="chat-container">
+          <label class="control-label">Mensajes Recientes</label>
+          <div class="messages-viewer" id="messagesViewer">
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px;">Selecciona un canal para cargar mensajes</div>
+          </div>
+
+          <label class="control-label">Responder / Mensajear</label>
           <div class="chat-input-wrapper">
-            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe un mensaje..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe un mensaje al canal..." onkeydown="if(event.key==='Enter') sendMessage()">
             <button class="btn-send" onclick="sendMessage()">Mandar</button>
           </div>
         </div>
       </div>
 
-      <!-- BUSCADOR SPOTIFY -->
-      <div class="control-row">
-        <span class="control-label">Buscar y Añadir a la cola</span>
-        <div class="search-container">
-          <div class="chat-input-wrapper">
-            <input type="text" class="chat-input" id="searchInput" placeholder="Buscar artista o canción..." onkeydown="if(event.key==='Enter') searchMusic()">
-            <button class="btn-send" onclick="searchMusic()">Buscar</button>
-          </div>
-          <div class="search-results" id="searchResults"></div>
-        </div>
-      </div>
-
-      <!-- COLA DE REPRODUCCIÓN -->
-      <div class="control-row">
-        <span class="control-label">Siguientes en la cola</span>
-        <div class="queue-container">
-          <div class="queue-list" id="queueList">
-            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">No hay canciones en cola</div>
-          </div>
+      <!-- PESTAÑA 3: CONSOLA DE SISTEMA -->
+      <div id="tab-consola" class="tab-content">
+        <div class="terminal-container">
+          <span class="control-label">Logs del Servidor y Errores (Tiempo Real)</span>
+          <div class="terminal-screen" id="terminalScreen">Cargando consola del bot...</div>
         </div>
       </div>
 
@@ -587,6 +764,9 @@
     let isPlaying = false;
     let progressMs = 0;
     let durationMs = 0;
+    let activeTab = 'reproductor';
+    let currentChannelId = '';
+    let chatRefreshInterval = null;
 
     function showToast(message) {
       const toast = document.getElementById('toast');
@@ -594,7 +774,7 @@
       toast.classList.add('show');
       setTimeout(() => {
         toast.classList.remove('show');
-      }, 3500);
+      }, 3000);
     }
 
     function formatTime(ms) {
@@ -605,8 +785,33 @@
       return `${min}:${sec < 10 ? '0' : ''}${sec}`;
     }
 
-    // Actualizar datos
+    // Navegar entre pestañas
+    function switchTab(tabId) {
+      activeTab = tabId;
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+      // Marcar botón activo
+      event.currentTarget.classList.add('active');
+      document.getElementById(`tab-${tabId}`).classList.add('active');
+
+      if (tabId === 'chat') {
+        loadChannels();
+      } else {
+        clearInterval(chatRefreshInterval);
+        chatRefreshInterval = null;
+      }
+
+      if (tabId === 'consola') {
+        loadLogs();
+      }
+    }
+
+    // -----------------------------------------------------------
+    // FUNCIONES DEL REPRODUCTOR
+    // -----------------------------------------------------------
     async function updateState() {
+      if (activeTab !== 'reproductor') return;
       try {
         const res = await fetch('/api/state');
         if (!res.ok) return;
@@ -644,19 +849,21 @@
         const pct = durationMs > 0 ? (progressMs / durationMs) * 100 : 0;
         document.getElementById('progressBarFill').style.width = `${pct}%`;
 
-        // Renderizar Cola de reproducción
+        // Renderizar Cola
         const queueContainer = document.getElementById('queueList');
         if (data.queue && data.queue.length > 0) {
           queueContainer.innerHTML = '';
           data.queue.forEach(item => {
             const row = document.createElement('div');
             row.className = 'queue-item';
+            row.onclick = () => playTrackDirectly(item.uri, item.title);
             row.innerHTML = `
               <img src="${item.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100'}" alt="Cover">
               <div class="search-item-info">
                 <div class="search-item-title">${item.title}</div>
                 <div class="search-item-artist">${item.artist}</div>
               </div>
+              <div style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">Reproducir ahora</div>
             `;
             queueContainer.appendChild(row);
           });
@@ -669,7 +876,49 @@
       }
     }
 
-    // Buscar canciones en Spotify
+    // Controles Siguiente / Anterior de Spotify
+    async function spotifyNext() {
+      try {
+        const res = await fetch('/api/next', { method: 'POST' });
+        if (res.ok) {
+          showToast('Siguiente canción');
+          setTimeout(updateState, 1000);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function spotifyPrevious() {
+      try {
+        const res = await fetch('/api/previous', { method: 'POST' });
+        if (res.ok) {
+          showToast('Canción anterior');
+          setTimeout(updateState, 1000);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function playTrackDirectly(uri, title) {
+      try {
+        const res = await fetch('/api/play-track', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uri })
+        });
+        if (res.ok) {
+          showToast(`Reproduciendo: "${title}"`);
+          setTimeout(updateState, 1000);
+        } else {
+          showToast('Error al reproducir');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
     async function searchMusic() {
       const input = document.getElementById('searchInput');
       const query = input.value.trim();
@@ -697,18 +946,19 @@
               <div class="search-item-title">${item.title}</div>
               <div class="search-item-artist">${item.artist}</div>
             </div>
-            <button class="btn-add-queue" onclick="addToQueue('${item.uri}', '${item.title.replace(/'/g, "\\'")}')">Añadir</button>
+            <div class="search-actions">
+              <button class="btn-action-music btn-play-now" onclick="playTrackDirectly('${item.uri}', '${item.title.replace(/'/g, "\\'")}')">Sonar</button>
+              <button class="btn-action-music btn-add-q" onclick="addToQueue('${item.uri}', '${item.title.replace(/'/g, "\\'")}')">Cola</button>
+            </div>
           `;
           container.appendChild(div);
         });
-
       } catch (e) {
         console.error(e);
         container.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); padding: 10px 0;">Error al buscar</div>';
       }
     }
 
-    // Añadir canción a la cola
     async function addToQueue(uri, title) {
       try {
         const res = await fetch('/api/queue', {
@@ -717,14 +967,11 @@
           body: JSON.stringify({ uri })
         });
         if (res.ok) {
-          showToast(`¡"${title}" añadida a la cola!`);
-          setTimeout(updateState, 1500); // Dar un segundo a Spotify para procesar y actualizar
-        } else {
-          showToast('Error al añadir a la cola');
+          showToast(`Añadida a la cola: "${title}"`);
+          setTimeout(updateState, 1200);
         }
       } catch (e) {
         console.error(e);
-        showToast('Error de conexión');
       }
     }
 
@@ -748,7 +995,7 @@
           body: JSON.stringify({ speed: parseFloat(speedVal) })
         });
         if (res.ok) {
-          showToast(`Velocidad ajustada a x${speedVal}`);
+          showToast(`Velocidad a x${speedVal}`);
           updateState();
         }
       } catch (e) {
@@ -776,7 +1023,7 @@
       try {
         const res = await fetch('/api/play-pause', { method: 'POST' });
         if (res.ok) {
-          showToast(isPlaying ? 'Música pausada' : 'Música reanudada');
+          showToast(isPlaying ? 'Pausado' : 'Reproduciendo');
           updateState();
         }
       } catch (e) {
@@ -784,29 +1031,114 @@
       }
     }
 
+    // -----------------------------------------------------------
+    // FUNCIONES DE CHAT DISCORD
+    // -----------------------------------------------------------
+    async function loadChannels() {
+      try {
+        const res = await fetch('/api/channels');
+        const channels = await res.json();
+        const select = document.getElementById('channelSelect');
+        select.innerHTML = '<option value="">-- Elige un canal de texto --</option>';
+        channels.forEach(ch => {
+          const opt = document.createElement('option');
+          opt.value = ch.id;
+          opt.innerText = `#${ch.name} (${ch.guildName})`;
+          select.appendChild(opt);
+        });
+
+        if (currentChannelId) {
+          select.value = currentChannelId;
+        }
+      } catch (e) {
+        console.error('Error al cargar canales:', e);
+      }
+    }
+
+    function onChannelChanged(channelId) {
+      currentChannelId = channelId;
+      if (!channelId) {
+        document.getElementById('messagesViewer').innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px;">Selecciona un canal para cargar mensajes</div>';
+        clearInterval(chatRefreshInterval);
+        chatRefreshInterval = null;
+        return;
+      }
+      
+      loadMessages();
+      
+      // Auto refrescar chat cada 4 segundos
+      clearInterval(chatRefreshInterval);
+      chatRefreshInterval = setInterval(loadMessages, 4000);
+    }
+
+    async function loadMessages() {
+      if (!currentChannelId || activeTab !== 'chat') return;
+      try {
+        const res = await fetch(`/api/channels/${currentChannelId}/messages`);
+        const messages = await res.json();
+        const viewer = document.getElementById('messagesViewer');
+        
+        if (messages.length === 0) {
+          viewer.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px;">No hay mensajes en este canal</div>';
+          return;
+        }
+
+        viewer.innerHTML = '';
+        messages.forEach(msg => {
+          const row = document.createElement('div');
+          row.className = 'chat-msg';
+          row.innerHTML = `<span class="chat-msg-author">${msg.author}:</span><span class="chat-msg-content">${msg.content}</span>`;
+          viewer.appendChild(row);
+        });
+
+        // Scroll al final del chat
+        viewer.scrollTop = viewer.scrollHeight;
+      } catch (e) {
+        console.error('Error al cargar mensajes:', e);
+      }
+    }
+
     async function sendMessage() {
       const input = document.getElementById('chatInput');
       const text = input.value.trim();
-      if (!text) return;
+      if (!text || !currentChannelId) return;
 
       try {
         const res = await fetch('/api/message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: text })
+          body: JSON.stringify({ message: text, channelId: currentChannelId })
         });
         if (res.ok) {
-          showToast('¡Mensaje enviado a Discord!');
           input.value = '';
+          loadMessages();
         } else {
-          showToast('⚠️ No me he unido al canal de voz todavía');
+          showToast('Error al enviar mensaje');
         }
       } catch (e) {
         console.error(e);
-        showToast('Error al enviar el mensaje');
       }
     }
 
+    // -----------------------------------------------------------
+    // FUNCIONES DE LA CONSOLA (LOGS)
+    // -----------------------------------------------------------
+    async function loadLogs() {
+      if (activeTab !== 'consola') return;
+      try {
+        const res = await fetch('/api/logs');
+        const logs = await res.json();
+        const terminal = document.getElementById('terminalScreen');
+        terminal.innerText = logs.join('\n');
+        
+        // Auto scroll
+        terminal.scrollTop = terminal.scrollHeight;
+      } catch (e) {
+        console.error('Error al cargar logs:', e);
+      }
+    }
+
+    // Clic barra progreso
     document.getElementById('progressBarBg').addEventListener('click', async (e) => {
       if (durationMs <= 0) return;
       const rect = e.currentTarget.getBoundingClientRect();
@@ -830,12 +1162,15 @@
       }
     });
 
-    // Bucles
+    // Bucles principales
     updateState();
-    setInterval(updateState, 2000); // 2 segundos para no saturar
+    setInterval(updateState, 2000);
+
+    // Consola refresco continuo cada 3 segundos
+    setInterval(loadLogs, 3000);
 
     setInterval(() => {
-      if (isPlaying && progressMs < durationMs) {
+      if (isPlaying && progressMs < durationMs && activeTab === 'reproductor') {
         progressMs += 1000;
         document.getElementById('currentTime').innerText = formatTime(progressMs);
         const pct = (progressMs / durationMs) * 100;
