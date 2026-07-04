@@ -84,7 +84,7 @@ async function getValidAccessToken() {
 // SERVIDOR WEB EXPRESS (SERVIR HTML Y MANEJAR OAUTH/INTERACTIONS)
 // -------------------------------------------------------------
 const app = express();
-const loginUrl = `http://localhost:${PORT}/login`;
+const loginUrl = `http://127.0.0.1:${PORT}/login`;
 
 // Servir archivos estáticos de la carpeta /public
 app.use(express.static(path.join(__dirname, 'public')));
