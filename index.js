@@ -154,15 +154,33 @@ async function getValidAccessToken() {
 }
 
 // -------------------------------------------------------------
+// VARIABLES GLOBALES DEL CONTROLADOR DEL PANEL WEB
+// -------------------------------------------------------------
+let currentVolume = 0.5; // Rango de 0 a 1.0 (50% por defecto)
+let currentSpeed = 1.0;  // Velocidad de reproducción (1.0 por defecto)
+let currentAudioResource = null;
+let currentPlaybackState = {
+  title: 'Ninguna canción',
+  artist: 'Spotify inactivo',
+  coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500',
+  progressMs: 0,
+  durationMs: 0,
+  isPlaying: false,
+  volume: 50,
+  speed: 1.0
+};
+
+// -------------------------------------------------------------
 // SERVIDOR WEB EXPRESS
 // -------------------------------------------------------------
 const app = express();
 const loginUrl = `http://${localIp}:${PORT}/login`;
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
 app.get('/login', (req, res) => {
-  const scopes = 'user-read-playback-state user-read-currently-playing';
+  const scopes = 'user-read-playback-state user-read-currently-playing user-modify-playback-state';
   const spotifyAuthUrl = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
     response_type: 'code',
     client_id: SPOTIFY_CLIENT_ID,
@@ -215,6 +233,120 @@ app.get('/callback', async (req, res) => {
     console.error('Error durante el intercambio de tokens:', error);
     res.status(500).send('Error interno del servidor');
   }
+});
+
+// Endpoints del Dashboard
+app.get('/api/state', (req, res) => {
+  if (currentPlaybackState.isPlaying && currentPlaybackState.progressMs < currentPlaybackState.durationMs) {
+    const elapsed = Date.now() - lastSyncTimestamp;
+    currentPlaybackState.progressMs = Math.min(
+      currentPlaybackState.durationMs,
+      lastSyncProgressMs + Math.round(elapsed * currentSpeed)
+    );
+  }
+  res.json(currentPlaybackState);
+});
+
+app.post('/api/volume', (req, res) => {
+  const { volume } = req.body;
+  if (typeof volume === 'number' && volume >= 0 && volume <= 100) {
+    currentVolume = volume / 100;
+    currentPlaybackState.volume = volume;
+    if (currentAudioResource && currentAudioResource.volume) {
+      currentAudioResource.volume.setVolume(currentVolume);
+    }
+    console.log(`[API] Volumen cambiado a: ${volume}%`);
+    return res.json({ success: true });
+  }
+  res.status(400).json({ error: 'Volumen inválido.' });
+});
+
+app.post('/api/speed', async (req, res) => {
+  const { speed } = req.body;
+  if (typeof speed === 'number' && speed >= 0.5 && speed <= 2.0) {
+    currentSpeed = speed;
+    currentPlaybackState.speed = speed;
+    console.log(`[API] Velocidad cambiada a: x${speed}`);
+    
+    if (currentYoutubeUrl && voiceConnection && audioPlayer) {
+      isSyncing = true;
+      await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, currentPlaybackState.isPlaying);
+      isSyncing = false;
+    }
+    return res.json({ success: true });
+  }
+  res.status(400).json({ error: 'Velocidad inválida.' });
+});
+
+app.post('/api/seek', async (req, res) => {
+  const { seconds, targetMs } = req.body;
+  let newProgressMs = currentPlaybackState.progressMs;
+  
+  if (typeof targetMs === 'number') {
+    newProgressMs = targetMs;
+  } else if (typeof seconds === 'number') {
+    newProgressMs = Math.max(0, Math.min(currentPlaybackState.durationMs, newProgressMs + seconds * 1000));
+  } else {
+    return res.status(400).json({ error: 'Parámetros inválidos.' });
+  }
+
+  currentPlaybackState.progressMs = newProgressMs;
+  lastSyncProgressMs = newProgressMs;
+  lastSyncTimestamp = Date.now();
+
+  console.log(`[API] Seek solicitado a: ${Math.round(newProgressMs / 1000)}s`);
+
+  if (currentYoutubeUrl && voiceConnection && audioPlayer) {
+    isSyncing = true;
+    await streamYoutubeAtProgress(currentYoutubeUrl, newProgressMs, currentPlaybackState.isPlaying);
+    isSyncing = false;
+  }
+  
+  res.json({ success: true, progressMs: newProgressMs });
+});
+
+app.post('/api/play-pause', async (req, res) => {
+  const token = await getValidAccessToken();
+  if (!token) return res.status(401).json({ error: 'No autenticado en Spotify.' });
+
+  try {
+    const action = currentPlaybackState.isPlaying ? 'pause' : 'play';
+    const response = await fetch(`https://api.spotify.com/v1/me/player/${action}`, {
+      method: 'PUT',
+      headers: { Authorization: `Bearer ${token}` }
+    });
+
+    if (response.ok || response.status === 204) {
+      currentPlaybackState.isPlaying = !currentPlaybackState.isPlaying;
+      if (currentPlaybackState.isPlaying) {
+        audioPlayer?.unpause();
+      } else {
+        audioPlayer?.pause();
+      }
+      return res.json({ success: true, isPlaying: currentPlaybackState.isPlaying });
+    }
+    
+    const errData = await response.json().catch(() => ({}));
+    res.status(response.status).json(errData);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/message', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'Mensaje vacío.' });
+
+  if (lastTextChannel) {
+    try {
+      await lastTextChannel.send(`💬 **[Panel Web]**: ${message}`);
+      return res.json({ success: true });
+    } catch (e) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+  res.status(400).json({ error: 'El bot no se ha unido a ningún canal de texto aún.' });
 });
 
 app.get('/terms', (req, res) => {
@@ -340,10 +472,10 @@ client.on('ready', async () => {
         const channel = await client.channels.fetch(state.channelId);
         if (channel) {
           channel.send(`¡**He vuelto**! 🚀 He realizado los siguientes cambios en mi sistema:
-🛠️ **Sincronización robusta**: Implementada vía el extractor nativo \`yt-dlp.exe\` para evitar bloqueos y errores 403.
-🔊 **Audio activado**: Integrado el decodificador \`opusscript\` para resolver los problemas de silencio al cantar.
-⏱️ **Inactividad**: Me desconectará automáticamente del canal de voz si pasas más de 2 minutos sin sonar música.
-👋 **Apagado controlado**: Ahora me saldré del canal limpiamente y te avisaré si el host me apaga con \`Ctrl + C\`.`);
+🛠️ **Sincronización robusta**: Enrutada vía \`yt-dlp.exe\` para evitar bloqueos.
+🔊 **Audio activado**: Integrado \`opusscript\` para resolver los silencios al cantar.
+⏱️ **Inactividad**: Desconexión automática tras 2 minutos sin sonar música.
+📱 **Panel Web y Móvil**: ¡Lanzado un panel de control interactivo en \`http://${localIp}:${PORT}/\` para bajar volumen, adelantar, cambiar velocidad y mensajear!`);
         }
       }
     } catch (e) {
@@ -390,7 +522,7 @@ client.on('messageCreate', async (message) => {
       });
 
       if (spotifyAccessToken) {
-        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.`);
+        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.\nPuedes abrir el panel de control web en: http://${localIp}:${PORT}/`);
       } else {
         replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo este enlace en tu navegador o escaneando el código QR de la consola: ${loginUrl}`);
       }
@@ -476,12 +608,14 @@ async function syncSpotifyPlayback(guildId) {
         console.log('Spotify inactivo. Pausando reproducción en Discord.');
         audioPlayer.pause();
       }
+      currentPlaybackState.isPlaying = false;
       checkInactivity(guildId, false);
       return;
     }
 
     const playback = await response.json();
     if (!playback || !playback.item) {
+      currentPlaybackState.isPlaying = false;
       checkInactivity(guildId, false);
       return;
     }
@@ -490,7 +624,21 @@ async function syncSpotifyPlayback(guildId) {
     const isPlayingOnSpotify = playback.is_playing;
     const progressMs = playback.progress_ms;
     const trackName = playback.item.name;
-    const artistName = playback.item.artists[0]?.name || '';
+    const artistName = playback.item.artists.map(a => a.name).join(', ');
+    const coverUrl = playback.item.album.images[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500';
+    const durationMs = playback.item.duration_ms;
+
+    // Actualizar estado del panel web
+    currentPlaybackState = {
+      title: trackName,
+      artist: artistName,
+      coverUrl: coverUrl,
+      progressMs: progressMs,
+      durationMs: durationMs,
+      isPlaying: isPlayingOnSpotify,
+      volume: Math.round(currentVolume * 100),
+      speed: currentSpeed
+    };
 
     checkInactivity(guildId, isPlayingOnSpotify);
 
@@ -514,7 +662,7 @@ async function syncSpotifyPlayback(guildId) {
 
     if (isPlayingOnSpotify) {
       const timeSinceLastSync = Date.now() - lastSyncTimestamp;
-      const expectedProgress = lastSyncProgressMs + timeSinceLastSync;
+      const expectedProgress = lastSyncProgressMs + Math.round(timeSinceLastSync * currentSpeed);
       const drift = Math.abs(progressMs - expectedProgress);
 
       if (drift > 15000) {
@@ -582,21 +730,27 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     console.log(`Obteniendo flujo de audio directo de YouTube...`);
     const directAudioUrl = await getDirectAudioUrl(url);
 
-    console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds} (PCM Crudo)...`);
+    console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds} (PCM Crudo, Velocidad: x${currentSpeed})...`);
     
-    // Capturamos stderr de FFmpeg cambiando el stdio a ['ignore', 'pipe', 'pipe']
-    activeFfmpegProcess = spawn(ffmpegPath, [
+    const ffmpegArgs = [
       '-ss', seekSeconds.toString(),
       '-i', directAudioUrl,
       '-f', 's16le',
       '-ar', '48000',
-      '-ac', '2',
-      'pipe:1'
-    ], {
+      '-ac', '2'
+    ];
+
+    // Aplicar filtro de velocidad de audio atempo de FFmpeg si la velocidad es diferente de x1.0
+    if (currentSpeed !== 1.0) {
+      ffmpegArgs.push('-af', `atempo=${currentSpeed}`);
+    }
+
+    ffmpegArgs.push('pipe:1');
+
+    activeFfmpegProcess = spawn(ffmpegPath, ffmpegArgs, {
       stdio: ['ignore', 'pipe', 'pipe']
     });
 
-    // Escuchar el canal de error para saber si FFmpeg falla
     activeFfmpegProcess.stderr.on('data', (data) => {
       console.log(`[FFMPEG ERROR] ${data.toString().trim()}`);
     });
@@ -605,11 +759,16 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
       console.log(`[FFMPEG PROCESO] Salida del proceso. Codigo: ${code}, Senal: ${signal}`);
     });
 
-    const resource = createAudioResource(activeFfmpegProcess.stdout, {
-      inputType: StreamType.Raw
+    // Activar volumen integrado en el recurso de audio
+    currentAudioResource = createAudioResource(activeFfmpegProcess.stdout, {
+      inputType: StreamType.Raw,
+      inlineVolume: true
     });
     
-    audioPlayer.play(resource);
+    // Aplicar volumen actual
+    currentAudioResource.volume.setVolume(currentVolume);
+    
+    audioPlayer.play(currentAudioResource);
     
     if (!isPlayingOnSpotify) {
       audioPlayer.pause();

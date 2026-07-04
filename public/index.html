@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SpotBOT - Panel de Control</title>
+  <!-- Google Fonts: Inter -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1DB954;
+      --bg-gradient: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #0f0f1a 100%);
+      --glass-bg: rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --text: #ffffff;
+      --text-muted: rgba(255, 255, 255, 0.6);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', sans-serif;
+    }
+
+    body {
+      background: var(--bg-gradient);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Soft glowing background decorative blobs */
+    .blob {
+      position: absolute;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(29, 185, 84, 0.25) 0%, transparent 70%);
+      z-index: 1;
+      filter: blur(50px);
+      animation: float 20s ease-in-out infinite alternate;
+    }
+
+    .blob-1 { top: -10%; left: -10%; }
+    .blob-2 { bottom: -10%; right: -10%; animation-delay: -10s; }
+
+    @keyframes float {
+      0% { transform: translate(0, 0) scale(1); }
+      100% { transform: translate(50px, 50px) scale(1.2); }
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      padding: 20px;
+      z-index: 2;
+    }
+
+    /* Glassmorphic Panel Card */
+    .card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(25px);
+      -webkit-backdrop-filter: blur(25px);
+      border-radius: 24px;
+      padding: 30px 24px;
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      transition: transform 0.3s ease;
+    }
+
+    header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+
+    header h1 span {
+      color: var(--primary);
+    }
+
+    /* Cover Album Artwork */
+    .album-art-container {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      border-radius: 18px;
+      overflow: hidden;
+      margin-bottom: 24px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .album-art {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+
+    .album-art.playing {
+      animation: pulseArt 4s ease-in-out infinite alternate;
+    }
+
+    @keyframes pulseArt {
+      0% { transform: scale(1); }
+      100% { transform: scale(1.04); }
+    }
+
+    /* Song Info */
+    .song-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+
+    .song-artist {
+      font-size: 0.95rem;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      width: 100%;
+    }
+
+    /* Custom Progress Bar */
+    .progress-container {
+      width: 100%;
+      margin-bottom: 24px;
+    }
+
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 3px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.1s linear;
+    }
+
+    .progress-time {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 8px;
+    }
+
+    /* Media Controls */
+    .media-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 28px;
+      margin-bottom: 28px;
+    }
+
+    .btn-ctrl {
+      background: none;
+      border: none;
+      color: var(--text);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.2s ease, color 0.2s ease;
+    }
+
+    .btn-ctrl:hover {
+      color: var(--primary);
+      transform: scale(1.1);
+    }
+
+    .btn-ctrl:active {
+      transform: scale(0.95);
+    }
+
+    .btn-play-pause {
+      width: 64px;
+      height: 64px;
+      background: var(--text);
+      color: #0f0f1a;
+      border-radius: 50%;
+      box-shadow: 0 4px 15px rgba(255,255,255,0.2);
+    }
+
+    .btn-play-pause:hover {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 4px 15px rgba(29, 185, 84, 0.4);
+    }
+
+    .btn-play-pause svg {
+      width: 28px;
+      height: 28px;
+      fill: currentColor;
+    }
+
+    .btn-seek-side svg {
+      width: 32px;
+      height: 32px;
+      fill: currentColor;
+    }
+
+    /* Speed Controls */
+    .control-row {
+      width: 100%;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+
+    .control-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    .speed-btn-group {
+      display: flex;
+      background: rgba(255,255,255,0.06);
+      padding: 4px;
+      border-radius: 12px;
+      border: 1px solid var(--glass-border);
+      width: 100%;
+    }
+
+    .btn-speed {
+      flex: 1;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      padding: 8px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .btn-speed.active {
+      background: var(--primary);
+      color: #ffffff;
+      box-shadow: 0 2px 8px rgba(29, 185, 84, 0.3);
+    }
+
+    /* Volume Slider */
+    .volume-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      padding: 12px 16px;
+      border-radius: 16px;
+      margin-bottom: 24px;
+    }
+
+    .volume-container svg {
+      width: 20px;
+      height: 20px;
+      fill: var(--text-muted);
+    }
+
+    .volume-slider {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255,255,255,0.1);
+      outline: none;
+      cursor: pointer;
+    }
+
+    .volume-slider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--primary);
+      box-shadow: 0 0 6px rgba(29, 185, 84, 0.5);
+      transition: transform 0.1s ease;
+    }
+
+    .volume-slider::-webkit-slider-thumb:hover {
+      transform: scale(1.2);
+    }
+
+    /* Discord Chat box integration */
+    .chat-container {
+      width: 100%;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      padding: 16px;
+      border-radius: 20px;
+      text-align: left;
+    }
+
+    .chat-input-wrapper {
+      display: flex;
+      gap: 8px;
+    }
+
+    .chat-input {
+      flex: 1;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--glass-border);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: #fff;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .chat-input:focus {
+      border-color: var(--primary);
+    }
+
+    .btn-send {
+      background: var(--primary);
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      padding: 0 16px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: opacity 0.2s ease;
+    }
+
+    .btn-send:hover {
+      opacity: 0.9;
+    }
+
+    /* Success message popups */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      background: #1DB954;
+      color: white;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      opacity: 0;
+      transform: translateY(20px);
+      transition: opacity 0.3s ease, transform 0.3s ease;
+      z-index: 10;
+      box-shadow: 0 4px 15px rgba(29,185,84,0.3);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+
+  <div class="container">
+    <div class="card">
+      <header>
+        <h1>Spot<span>BOT</span> Panel</h1>
+      </header>
+
+      <!-- Portada -->
+      <div class="album-art-container">
+        <img src="https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500" alt="Portada de canción" class="album-art" id="albumArt">
+      </div>
+
+      <!-- Detalle de canción -->
+      <div class="song-title" id="songTitle">Esperando reproducción...</div>
+      <div class="song-artist" id="songArtist">Conecta Spotify e inicia el bot</div>
+
+      <!-- Barra de progreso -->
+      <div class="progress-container">
+        <div class="progress-bar-bg" id="progressBarBg">
+          <div class="progress-bar-fill" id="progressBarFill"></div>
+        </div>
+        <div class="progress-time">
+          <span id="currentTime">0:00</span>
+          <span id="totalTime">0:00</span>
+        </div>
+      </div>
+
+      <!-- Controles multimedia -->
+      <div class="media-controls">
+        <!-- Retroceder 30s -->
+        <button class="btn-ctrl btn-seek-side" onclick="seek(-30)" title="Retroceder 30s">
+          <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.63 7.82h-.99v2.24H8.36v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
+        </button>
+
+        <!-- Play / Pause -->
+        <button class="btn-ctrl btn-play-pause" onclick="togglePlayPause()" id="btnPlayPause">
+          <svg viewBox="0 0 24 24" id="svgPlayPause"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+
+        <!-- Adelantar 30s -->
+        <button class="btn-ctrl btn-seek-side" onclick="seek(30)" title="Adelantar 30s">
+          <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm1.63 7.82h-.99v2.24H11.72v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
+        </button>
+      </div>
+
+      <!-- Fila: Velocidad -->
+      <div class="control-row">
+        <span class="control-label">Velocidad</span>
+        <div class="speed-btn-group">
+          <button class="btn-speed active" id="speed-1" onclick="setSpeed(1.0)">x1.0</button>
+          <button class="btn-speed" id="speed-1_5" onclick="setSpeed(1.5)">x1.5</button>
+          <button class="btn-speed" id="speed-2" onclick="setSpeed(2.0)">x2.0</button>
+        </div>
+      </div>
+
+      <!-- Fila: Volumen -->
+      <div class="control-row">
+        <span class="control-label">Volumen Bot</span>
+        <div class="volume-container">
+          <svg viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+          <input type="range" class="volume-slider" id="volumeSlider" min="0" max="100" value="50" oninput="changeVolume(this.value)">
+        </div>
+      </div>
+
+      <!-- Fila: Enviar a Discord -->
+      <div class="control-row">
+        <span class="control-label">Enviar mensaje a Discord</span>
+        <div class="chat-container">
+          <div class="chat-input-wrapper">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Escribe un mensaje al chat..." onkeydown="if(event.key==='Enter') sendMessage()">
+            <button class="btn-send" onclick="sendMessage()">Mandar</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="toast" id="toast">¡Mensaje enviado a Discord!</div>
+
+  <script>
+    let isPlaying = false;
+    let progressMs = 0;
+    let durationMs = 0;
+    let timerId = null;
+
+    // Toast de notificación
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3500);
+    }
+
+    // Formatear milisegundos en min:seg
+    function formatTime(ms) {
+      if (isNaN(ms) || ms < 0) return '0:00';
+      const totalSec = Math.floor(ms / 1000);
+      const min = Math.floor(totalSec / 60);
+      const sec = totalSec % 60;
+      return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+    }
+
+    // Consultar el estado del backend continuamente
+    async function updateState() {
+      try {
+        const res = await fetch('/api/state');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // Actualizar título, artista e imagen
+        document.getElementById('songTitle').innerText = data.title;
+        document.getElementById('songArtist').innerText = data.artist || 'Sin artista';
+        if (data.coverUrl) {
+          document.getElementById('albumArt').src = data.coverUrl;
+        }
+
+        // Volumen y velocidad
+        document.getElementById('volumeSlider').value = data.volume;
+        
+        // Activar botón de velocidad correcto
+        document.querySelectorAll('.btn-speed').forEach(btn => btn.classList.remove('active'));
+        if (data.speed === 1.0) document.getElementById('speed-1').classList.add('active');
+        if (data.speed === 1.5) document.getElementById('speed-1_5').classList.add('active');
+        if (data.speed === 2.0) document.getElementById('speed-2').classList.add('active');
+
+        // Play/Pause button styling
+        isPlaying = data.isPlaying;
+        const btnPlayPause = document.getElementById('btnPlayPause');
+        const svgPath = document.getElementById('svgPlayPause');
+        if (isPlaying) {
+          document.getElementById('albumArt').classList.add('playing');
+          svgPath.innerHTML = '<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>'; // Icono Pause
+        } else {
+          document.getElementById('albumArt').classList.remove('playing');
+          svgPath.innerHTML = '<path d="M8 5v14l11-7z"/>'; // Icono Play
+        }
+
+        // Tiempos y barra de progreso
+        progressMs = data.progressMs;
+        durationMs = data.durationMs;
+
+        document.getElementById('currentTime').innerText = formatTime(progressMs);
+        document.getElementById('totalTime').innerText = formatTime(durationMs);
+
+        const pct = durationMs > 0 ? (progressMs / durationMs) * 100 : 0;
+        document.getElementById('progressBarFill').style.width = `${pct}%`;
+
+      } catch (e) {
+        console.error('Error al actualizar el estado del dashboard:', e);
+      }
+    }
+
+    // Modificar volumen
+    async function changeVolume(val) {
+      try {
+        await fetch('/api/volume', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ volume: parseInt(val) })
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Modificar velocidad
+    async function setSpeed(speedVal) {
+      try {
+        const res = await fetch('/api/speed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ speed: parseFloat(speedVal) })
+        });
+        if (res.ok) {
+          showToast(`Velocidad ajustada a x${speedVal}`);
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Adelantar o retroceder
+    async function seek(seconds) {
+      try {
+        const res = await fetch('/api/seek', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ seconds: parseInt(seconds) })
+        });
+        if (res.ok) {
+          showToast(seconds > 0 ? `Adelantado +${seconds}s` : `Retrocedido ${seconds}s`);
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Play/Pause
+    async function togglePlayPause() {
+      try {
+        const res = await fetch('/api/play-pause', { method: 'POST' });
+        if (res.ok) {
+          showToast(isPlaying ? 'Música pausada' : 'Música reanudada');
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Mandar mensaje a Discord
+    async function sendMessage() {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+
+      try {
+        const res = await fetch('/api/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text })
+        });
+        if (res.ok) {
+          showToast('¡Mensaje enviado a Discord!');
+          input.value = '';
+        } else {
+          showToast('⚠️ No me he unido al canal de voz todavía');
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error al enviar el mensaje');
+      }
+    }
+
+    // Clic en la barra de progreso para hacer seek exacto
+    document.getElementById('progressBarBg').addEventListener('click', async (e) => {
+      if (durationMs <= 0) return;
+      const rect = e.target.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const width = rect.width;
+      const percentage = clickX / width;
+      const targetMs = Math.floor(percentage * durationMs);
+      
+      try {
+        const res = await fetch('/api/seek', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ targetMs: targetMs })
+        });
+        if (res.ok) {
+          showToast(`Saltado a ${formatTime(targetMs)}`);
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    });
+
+    // Iniciar bucles de sincronización local del UI
+    updateState();
+    setInterval(updateState, 1000);
+
+    // Incrementar progreso localmente cada segundo para una barra más fluida
+    setInterval(() => {
+      if (isPlaying && progressMs < durationMs) {
+        progressMs += 1000;
+        document.getElementById('currentTime').innerText = formatTime(progressMs);
+        const pct = (progressMs / durationMs) * 100;
+        document.getElementById('progressBarFill').style.width = `${pct}%`;
+      }
+    }, 1000);
+  </script>
+</body>
+</html>
