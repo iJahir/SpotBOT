@@ -53,7 +53,6 @@ function getLocalIpAddress() {
   const interfaces = os.networkInterfaces();
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name]) {
-      // Saltar direcciones internas (127.0.0.1) e IPv6
       if (iface.family === 'IPv4' && !iface.internal) {
         return iface.address;
       }
@@ -157,7 +156,6 @@ async function getValidAccessToken() {
 // SERVIDOR WEB EXPRESS
 // -------------------------------------------------------------
 const app = express();
-// Usar la IP local del PC para el login
 const loginUrl = `http://${localIp}:${PORT}/login`;
 
 app.use(express.static(path.join(__dirname, 'public')));
@@ -285,7 +283,6 @@ downloadYtDlp().then(() => {
     console.log(`- Endpoint de Interacciones: http://${localIp}:${PORT}/interactions`);
     console.log(`============================================================\n`);
     
-    // Generar código QR apuntando a la IP local para que el móvil pueda leerlo en la misma red
     qrcode.generate(loginUrl, { small: true });
   });
 }).catch(err => {
@@ -362,22 +359,28 @@ client.on('messageCreate', async (message) => {
   }
 
   if (content === '!leaveS') {
-    cleanupAndLeave(message.guild.id);
+    cleanupAndLeave();
     message.reply('He salido del canal de voz y la sincronización se ha detenido.');
   }
 });
 
-function cleanupAndLeave(guildId) {
+function cleanupAndLeave() {
   stopSyncLoop();
   stopActiveFfmpeg();
   if (inactivityTimeoutId) {
     clearTimeout(inactivityTimeoutId);
     inactivityTimeoutId = null;
   }
-  const connection = getVoiceConnection(guildId);
-  if (connection) {
-    connection.destroy();
+  
+  // Garantizar desconexión física destruyendo la conexión global
+  if (voiceConnection) {
+    try {
+      voiceConnection.destroy();
+    } catch (e) {
+      console.error('Error al desconectar el canal de voz:', e);
+    }
   }
+  
   voiceConnection = null;
   audioPlayer = null;
   currentTrackId = null;
@@ -496,7 +499,7 @@ function checkInactivity(guildId, isPlaying) {
         if (lastTextChannel) {
           lastTextChannel.send('⚠️ Me he desconectado del canal de voz por inactividad (2 minutos sin reproducir música).');
         }
-        cleanupAndLeave(guildId);
+        cleanupAndLeave();
       }, 120000);
     }
   }
@@ -558,6 +561,18 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     console.error('Error al transmitir el audio:', error);
   }
 }
+
+// -------------------------------------------------------------
+// SALIDA LIMPIA Y CONTROLADA (GRACEFUL SHUTDOWN)
+// -------------------------------------------------------------
+const handleShutdown = () => {
+  console.log('\nApagando el bot de forma segura y saliendo de los canales de voz...');
+  cleanupAndLeave();
+  process.exit(0);
+};
+
+process.on('SIGINT', handleShutdown);
+process.on('SIGTERM', handleShutdown);
 
 // Iniciar sesión en Discord
 client.login(DISCORD_TOKEN);
