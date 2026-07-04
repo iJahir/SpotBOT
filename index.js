@@ -14,6 +14,7 @@ import {
 } from '@discordjs/voice';
 import play from 'play-dl';
 import qrcode from 'qrcode-terminal';
+import ytdl from '@distube/ytdl-core';
 
 // Obtener rutas absolutas para archivos estáticos
 const __filename = fileURLToPath(import.meta.url);
@@ -398,8 +399,13 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     const seekSeconds = Math.floor(progressMs / 1000);
     console.log(`Transmitiendo desde YouTube a partir del segundo ${seekSeconds}...`);
 
-    const stream = await play.stream(url, { seek: seekSeconds });
-    const resource = createAudioResource(stream.stream, { inputType: stream.type });
+    const stream = ytdl(url, {
+      filter: 'audioonly',
+      quality: 'highestaudio',
+      highWaterMark: 1 << 25,
+      begin: `${seekSeconds}s`
+    });
+    const resource = createAudioResource(stream);
     
     audioPlayer.play(resource);
     
