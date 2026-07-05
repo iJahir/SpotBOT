@@ -10,7 +10,7 @@ Incluye un **Panel de Control Glassmorphic interactivo** optimizado para computa
 
 * 🎵 **Sincronización Spotify en Tiempo Real**: Sincroniza la música de tu Spotify con un canal de voz de Discord. Si pausas, adelantas o cambias de canción en tu aplicación de Spotify, el bot lo imita en Discord.
 * 📱 **Panel Web y Móvil Premium**: Controla el volumen, busca y encola canciones, cambia la velocidad de la música (x1.0, x1.5, x2.0) y chatea en Discord desde tu teléfono o computadora.
-* 🔊 **Soundboard Integrado**: Reproduce efectos de sonido instantáneos (MLG Airhorn, Bruh, Sad Violin, Tada) y sonidos nativos de tu servidor pausando temporalmente la música y reanudándola de forma automática al terminar.
+* 🔊 **Soundboard Integrado**: Reproduce los sonidos oficiales por defecto de Discord (`quack` 🦆, `airhorn` 📢, `cricket` 🦗, `golf clap` 👏, `sad horn` 📯 y `ba dum tss` 🥁) y los sonidos personalizados que la gente haya subido a tu servidor de Discord.
 * ⏰ **Programador de Alertas**: Envía menciones programadas (`@everyone`, `@here` o miembros individuales) para avisar de sesiones de juego, cambiando automáticamente la presencia del bot en Discord por la duración que especifiques.
 * 🟢 **Control de Presencia**: Ajusta el estado de conexión del bot (Online, Ausente, No Molestar) y su juego activo directamente desde la web.
 * 🔒 **Rol Developer de Seguridad**: El bot responde públicamente a comandos de voz únicamente si el usuario tiene el rol `Developer`. Para los demás usuarios, procesa en silencio, elimina el mensaje disparador y envía una alerta de auditoría al canal de testeo.
@@ -28,7 +28,7 @@ Antes de montar tu propio bot, asegúrate de tener instalado:
 
 ## ⚙️ Configuración y Credenciales (Archivo `.env`)
 
-Crea un archivo llamado `.env` en la raíz del proyecto. Si otra persona desea montar su propio bot, debe rellenar este archivo con sus credenciales de desarrollador obtenidas en los paneles de Discord y Spotify:
+Crea un archivo llamado `.env` en la raíz del proyecto. Si deseas montar tu propio bot o experimentar con tus propias APIs, debes rellenar este archivo con tus credenciales de desarrollador obtenidas en los paneles de Discord y Spotify:
 
 ```env
 # Token del Bot de Discord
@@ -44,7 +44,7 @@ SPOTIFY_CLIENT_ID=tu_client_id_de_spotify
 SPOTIFY_CLIENT_SECRET=tu_client_secret_de_spotify
 
 # URI de redirección de Spotify para autenticación (Debe coincidir con la de Spotify Dashboard)
-SPOTIFY_REDIRECT_URI=http://192.168.1.95:5000/callback
+SPOTIFY_REDIRECT_URI=http://localhost:5000/callback
 
 # Puerto donde se ejecuta el servidor del panel web
 PORT=5000
@@ -58,6 +58,7 @@ PORT=5000
    * *Server Members Intent*
    * *Message Content Intent*
 4. En **OAuth2**, genera un *Client Secret* (`DISCORD_CLIENT_SECRET`).
+5. Ve a la sección **OAuth2 -> General** e ingresa en **Redirects** tu URL de interacciones si planeas usar slash commands (opcional).
 
 ### 2. Cómo obtener las credenciales de Spotify:
 1. Ve al [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
@@ -78,7 +79,7 @@ PORT=5000
    ```
 3. El bot te mostrará tu enlace local en la consola y dibujará un código QR.
 4. **Abrir el Panel:**
-   * **En PC:** Abre `http://localhost:5000` en tu navegador.
+   * **En PC (Ctrl+Clic):** Abre `http://localhost:5000` en tu navegador.
    * **En Celular (Móvil):** Escanea el código QR que se muestra en tu terminal (ambos dispositivos deben estar conectados al mismo Wi-Fi).
 5. **Vincular Spotify:** En el panel, haz clic en **Vincular Spotify** o entra a `http://localhost:5000/login` e inicia sesión con la cuenta de Spotify que vas a retransmitir.
 
@@ -90,6 +91,12 @@ El bot escucha los siguientes comandos escritos en cualquier canal de texto de t
 
 * `!joinS`: Conecta el bot a tu canal de voz actual de Discord e inicia la sincronización de Spotify en tiempo real.
 * `!leaveS`: Desconecta al bot del canal de voz y detiene el streaming.
+* `!creador`: Muestra quién es el creador del bot.
+* `!nowplaying`: Muestra detalles de la canción reproduciéndose ahora en Discord.
+* `!queue`: Lista las siguientes 5 canciones en la cola de Spotify.
+* `!fav`: Muestra o guarda favoritos.
+* `!historial` o `!history`: Lista los últimos 5 temas reproducidos.
+* `!loop`: Cambia el modo de bucle (none / track / queue).
 
 ---
 

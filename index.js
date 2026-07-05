@@ -1276,6 +1276,44 @@ let lastTextChannel = null;
 let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
 let isSyncing = false;
+let isChangingTrack = false;
+
+function setupAudioPlayer(connection) {
+  audioPlayer = createAudioPlayer();
+  connection.subscribe(audioPlayer);
+
+  audioPlayer.on('stateChange', async (oldState, newState) => {
+    console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
+    
+    if (newState.status === AudioPlayerStatus.Idle) {
+      if (isChangingTrack) {
+        console.log('[REPRODUCTOR AUDIO] Cambio de cancion intencional detectado. Ignorando Idle.');
+        return;
+      }
+      
+      const token = await getValidAccessToken();
+      if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing && !isSoundboardPlaying && !isRadioMode) {
+        logSystemError('ERR-01', 'Pérdida de red o Connection Reset de YouTube (10054). Iniciando reconexión auto-sanable...');
+        isSyncing = true;
+        setTimeout(async () => {
+          try {
+            if (!isChangingTrack) {
+              await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
+            }
+          } catch (e) {
+            logSystemError('ERR-01', 'Fallo al auto-reconectar el flujo tras caída de YouTube.', e);
+          } finally {
+            isSyncing = false;
+          }
+        }, 1000);
+      }
+    }
+  });
+
+  audioPlayer.on('error', error => {
+    logSystemError('ERR-04', 'Error controlado en el reproductor de audio de voz.', error);
+  });
+}
 
 // Memoria persistente del último canal de voz activo para auto-reconexión
 let lastVoiceChannelId = null;
@@ -1585,33 +1623,7 @@ client.on('messageCreate', async (message) => {
         console.log(`[CONEXIÓN DISCORD] Estado: ${oldState.status} -> ${newState.status}`);
       });
 
-      audioPlayer = createAudioPlayer();
-      voiceConnection.subscribe(audioPlayer);
-
-      audioPlayer.on('stateChange', async (oldState, newState) => {
-        console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
-        
-        if (newState.status === AudioPlayerStatus.Idle) {
-          const token = await getValidAccessToken();
-          if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing && !isSoundboardPlaying && !isRadioMode) {
-            logSystemError('ERR-01', 'Pérdida de red o Connection Reset de YouTube (10054). Iniciando reconexión auto-sanable...');
-            isSyncing = true;
-            setTimeout(async () => {
-              try {
-                await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
-              } catch (e) {
-                logSystemError('ERR-01', 'Fallo al auto-reconectar el flujo tras caída de YouTube.', e);
-              } finally {
-                isSyncing = false;
-              }
-            }, 1000);
-          }
-        }
-      });
-
-      audioPlayer.on('error', error => {
-        logSystemError('ERR-04', 'Error controlado en el reproductor de audio de voz.', error);
-      });
+      setupAudioPlayer(voiceConnection);
 
       let joinDescription = '';
       if (spotifyAccessToken) {
@@ -1675,30 +1687,7 @@ async function autoReconnectToVoice() {
       selfMute: false
     });
 
-    audioPlayer = createAudioPlayer();
-    voiceConnection.subscribe(audioPlayer);
-
-    audioPlayer.on('stateChange', async (oldState, newState) => {
-      if (newState.status === AudioPlayerStatus.Idle) {
-        const token = await getValidAccessToken();
-        if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing && !isSoundboardPlaying && !isRadioMode) {
-          isSyncing = true;
-          setTimeout(async () => {
-            try {
-              await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
-            } catch (e) {
-              console.error(e);
-            } finally {
-              isSyncing = false;
-            }
-          }, 1000);
-        }
-      }
-    });
-
-    audioPlayer.on('error', error => {
-      console.error(error);
-    });
+    setupAudioPlayer(voiceConnection);
 
     if (lastTextChannel) {
       const embed = new EmbedBuilder()
@@ -1962,12 +1951,14 @@ function checkInactivity(guildId, isPlaying) {
 
 async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify) {
   try {
+    isChangingTrack = true;
     const searchQuery = `${trackName} ${artistName} official audio`;
     console.log(`Buscando en YouTube: "${searchQuery}"`);
     const searchResults = await play.search(searchQuery, { limit: 1 });
 
     if (searchResults.length === 0) {
       logSystemError('ERR-03', `No se encontraron resultados en YouTube para: ${searchQuery}`);
+      isChangingTrack = false;
       return;
     }
 
@@ -1981,6 +1972,7 @@ async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotif
 
 async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
   try {
+    isChangingTrack = true;
     stopActiveFfmpeg();
 
     const seekSeconds = Math.floor(progressMs / 1000);
@@ -1990,6 +1982,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     // Validación de seguridad de desconexión del reproductor
     if (!audioPlayer) {
       console.log('El reproductor de audio se desconectó durante la resolución de red de YouTube. Transmisión cancelada.');
+      isChangingTrack = false;
       return;
     }
 
@@ -2038,6 +2031,7 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
 
     lastSyncProgressMs = progressMs;
     lastSyncTimestamp = Date.now();
+    isChangingTrack = false;
   } catch (error) {
     logSystemError('ERR-01', 'Fallo al abrir o decodificar flujo de audio con FFmpeg.', error);
   }
