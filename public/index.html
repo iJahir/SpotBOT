@@ -93,18 +93,28 @@
     }
 
     header h1 {
-      font-size: 1.5rem;
+      font-size: 1.4rem;
       font-weight: 700;
       letter-spacing: -0.5px;
       color: var(--text);
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 8px;
+      gap: 4px;
       margin-bottom: 12px;
+      text-align: center;
+      width: 100%;
     }
 
     header h1 span {
       color: var(--primary);
+    }
+
+    header h1 small {
+      font-size: 0.8rem;
+      font-weight: 400;
+      color: var(--text-muted);
+      margin-top: 2px;
     }
 
     /* Status Bar */
@@ -602,6 +612,28 @@
       gap: 8px;
     }
 
+    .chat-bubble-wrapper {
+      display: flex;
+      align-items: flex-end;
+      gap: 8px;
+      max-width: 90%;
+      align-self: flex-start;
+    }
+
+    .chat-bubble-wrapper.panel-msg {
+      align-self: flex-end;
+      flex-direction: row-reverse;
+    }
+
+    .chat-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: #36393f;
+      object-fit: cover;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+
     .chat-bubble {
       display: flex;
       flex-direction: column;
@@ -609,14 +641,11 @@
       border: 1px solid rgba(255, 255, 255, 0.05);
       padding: 8px 12px;
       border-radius: 12px;
-      max-width: 90%;
-      align-self: flex-start;
     }
 
-    .chat-bubble.panel-msg {
+    .chat-bubble-wrapper.panel-msg .chat-bubble {
       background: rgba(29, 185, 84, 0.1);
       border-color: rgba(29, 185, 84, 0.2);
-      align-self: flex-end;
     }
 
     .chat-bubble-author {
@@ -626,7 +655,7 @@
       margin-bottom: 2px;
     }
 
-    .chat-bubble.panel-msg .chat-bubble-author {
+    .chat-bubble-wrapper.panel-msg .chat-bubble-author {
       color: #6eff95;
     }
 
@@ -651,15 +680,25 @@
     }
 
     .mention-badge {
-      background: rgba(29, 185, 84, 0.15);
-      border: 1px solid rgba(29, 185, 84, 0.3);
+      background: rgba(29, 185, 84, 0.12);
+      border: 1px solid rgba(29, 185, 84, 0.25);
       color: #6eff95;
       padding: 4px 8px;
-      border-radius: 6px;
+      border-radius: 20px;
       font-size: 0.75rem;
       font-weight: 600;
       cursor: pointer;
-      transition: background 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s;
+    }
+
+    .mention-badge img {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      object-fit: cover;
     }
 
     .mention-badge:hover {
@@ -767,7 +806,7 @@
   <div class="container">
     <div class="card">
       <header>
-        <h1>Spot<span>BOT</span> Panel</h1>
+        <h1>Spot<span>BOT</span> Panel <small id="headerGuildName"></small></h1>
       </header>
 
       <!-- Barra de Estado en Tiempo Real -->
@@ -1004,6 +1043,9 @@
           voicePill.innerText = 'Voz: Desconectado';
           voicePill.classList.remove('connected');
         }
+
+        // Nombre del Servidor en el Header
+        document.getElementById('headerGuildName').innerText = data.guildName ? ` - ${data.guildName}` : '';
 
         if (activeTab !== 'reproductor') return;
 
@@ -1314,7 +1356,9 @@
         members.forEach(member => {
           const badge = document.createElement('span');
           badge.className = 'mention-badge';
-          badge.innerText = `@${member.displayName}`;
+          // Renderizar con avatar si existe
+          const avatarHtml = member.avatar ? `<img src="${member.avatar}" alt="Avatar">` : '';
+          badge.innerHTML = `${avatarHtml}@${member.displayName}`;
           badge.onclick = () => {
             const chatInput = document.getElementById('realChatInput');
             chatInput.value += `@${member.username} `;
@@ -1344,14 +1388,20 @@
           const isPanel = msg.isMe || msg.content.startsWith('**Panel**:');
           const cleanContent = msg.content.replace(/^\*\*Panel\*\*:\s*/, '');
           
-          const bubble = document.createElement('div');
-          bubble.className = `chat-bubble ${isPanel ? 'panel-msg' : ''}`;
+          const wrapper = document.createElement('div');
+          wrapper.className = `chat-bubble-wrapper ${isPanel ? 'panel-msg' : ''}`;
+
+          // Cargar avatar del usuario
+          const avatarUrl = msg.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png';
           
-          bubble.innerHTML = `
-            <span class="chat-bubble-author">${isPanel ? 'Panel (Tú)' : msg.author}</span>
-            <span class="chat-bubble-content">${cleanContent}</span>
+          wrapper.innerHTML = `
+            <img class="chat-avatar" src="${avatarUrl}" alt="Avatar">
+            <div class="chat-bubble">
+              <span class="chat-bubble-author">${isPanel ? 'Panel (Tú)' : msg.author}</span>
+              <span class="chat-bubble-content">${cleanContent}</span>
+            </div>
           `;
-          viewer.appendChild(bubble);
+          viewer.appendChild(wrapper);
         });
 
         viewer.scrollTop = viewer.scrollHeight;

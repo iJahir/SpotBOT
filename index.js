@@ -216,7 +216,8 @@ let currentPlaybackState = {
   speed: 1.0,
   queue: [],
   guildCount: 0,
-  voiceConnected: false
+  voiceConnected: false,
+  guildName: null
 };
 
 // -------------------------------------------------------------
@@ -296,6 +297,8 @@ app.get('/api/state', (req, res) => {
   
   currentPlaybackState.guildCount = client.guilds.cache.size;
   currentPlaybackState.voiceConnected = voiceConnection !== null;
+  currentPlaybackState.guildName = lastTextChannel ? lastTextChannel.guild.name : (voiceConnection ? client.guilds.cache.get(voiceConnection.joinConfig.guildId)?.name : null);
+  
   res.json(currentPlaybackState);
 });
 
@@ -587,7 +590,7 @@ app.get('/api/channels', async (req, res) => {
     for (const [guildId, guild] of client.guilds.cache) {
       const guildChannels = await guild.channels.fetch();
       for (const [channelId, channel] of guildChannels) {
-        if (channel.type === 0) {
+        if (channel.isTextBased() && channel.type !== 2 && channel.type !== 13) {
           channelsList.push({
             id: channel.id,
             name: channel.name,
@@ -602,18 +605,19 @@ app.get('/api/channels', async (req, res) => {
   }
 });
 
-// Obtener mensajes de un canal
+// Obtener mensajes de un canal incluyendo el avatar URL de cada autor
 app.get('/api/channels/:id/messages', async (req, res) => {
   const { id } = req.params;
   try {
     const channel = await client.channels.fetch(id);
-    if (!channel || channel.type !== 0) {
+    if (!channel || !channel.isTextBased()) {
       return res.status(404).json({ error: 'Canal de texto no encontrado.' });
     }
     const messages = await channel.messages.fetch({ limit: 15 });
     const formatted = messages.map(msg => ({
       id: msg.id,
       author: msg.author.username,
+      avatar: msg.author.displayAvatarURL({ size: 64 }),
       content: msg.content,
       timestamp: msg.createdAt,
       isMe: msg.author.id === client.user.id
@@ -624,7 +628,7 @@ app.get('/api/channels/:id/messages', async (req, res) => {
   }
 });
 
-// Obtener los miembros del servidor de un canal específico con sistema de fallbacks robusto
+// Obtener los miembros del servidor de un canal específico con sistema de fallbacks robusto y avatar
 app.get('/api/channels/:id/members', async (req, res) => {
   const { id } = req.params;
   try {
@@ -639,13 +643,15 @@ app.get('/api/channels/:id/members', async (req, res) => {
       const members = await channel.guild.members.fetch({ limit: 80 });
       membersList = members.map(m => ({
         username: m.user.username,
-        displayName: m.displayName
+        displayName: m.displayName,
+        avatar: m.user.displayAvatarURL({ size: 64 })
       }));
     } catch (fetchErr) {
       // Fallback 1: Usar la caché rápida local
       membersList = channel.guild.members.cache.map(m => ({
         username: m.user.username,
-        displayName: m.displayName
+        displayName: m.displayName,
+        avatar: m.user.displayAvatarURL({ size: 64 })
       }));
     }
     
@@ -658,7 +664,8 @@ app.get('/api/channels/:id/members', async (req, res) => {
           if (!msg.author.bot) {
             uniqueAuthors.set(msg.author.id, {
               username: msg.author.username,
-              displayName: msg.member ? msg.member.displayName : msg.author.username
+              displayName: msg.member ? msg.member.displayName : msg.author.username,
+              avatar: msg.author.displayAvatarURL({ size: 64 })
             });
           }
         });
