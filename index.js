@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import { exec, spawn } from 'child_process';
 import util from 'util';
 import ffmpegPath from 'ffmpeg-static';
-import { Client, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
+import { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
 import {
   joinVoiceChannel,
   createAudioPlayer,
@@ -82,6 +82,25 @@ function writeJSON(file, data) {
 if (!fs.existsSync(favoritesFilePath)) writeJSON(favoritesFilePath, []);
 if (!fs.existsSync(historyFilePath)) writeJSON(historyFilePath, []);
 if (!fs.existsSync(statsFilePath)) writeJSON(statsFilePath, { totalPlaySeconds: 0, totalTracksPlayed: 0 });
+
+// Lógica autolimpiadora: Filtrar y quitar emisoras de radio que se hayan guardado previamente en favoritos o historial
+function cleanRadioFromJSON() {
+  let favs = readJSON(favoritesFilePath);
+  let hist = readJSON(historyFilePath);
+
+  const cleanFavs = favs.filter(f => f.artist !== 'Emisión en vivo (Radio)');
+  const cleanHist = hist.filter(h => h.artist !== 'Emisión en vivo (Radio)');
+
+  if (favs.length !== cleanFavs.length) {
+    console.log(`[LIMPIEZA] Eliminadas ${favs.length - cleanFavs.length} entradas de radio en favorites.json`);
+    writeJSON(favoritesFilePath, cleanFavs);
+  }
+  if (hist.length !== cleanHist.length) {
+    console.log(`[LIMPIEZA] Eliminadas ${hist.length - cleanHist.length} entradas de radio en history.json`);
+    writeJSON(historyFilePath, cleanHist);
+  }
+}
+cleanRadioFromJSON();
 
 // -------------------------------------------------------------
 // SISTEMA DE LOGS Y CONSOLA EN TIEMPO REAL CON CÓDIGOS DE ERROR
@@ -558,6 +577,9 @@ app.post('/api/stop', (req, res) => {
 app.post('/api/favorites/toggle', async (req, res) => {
   const { title, artist, uri, coverUrl } = req.body;
   if (!title) return res.status(400).json({ error: 'Falta título.' });
+  if (artist === 'Emisión en vivo (Radio)') {
+    return res.status(400).json({ error: 'No se pueden añadir emisoras de radio a favoritos.' });
+  }
   
   let favs = readJSON(favoritesFilePath);
   const exists = favs.some(f => f.title === title && f.artist === artist);
@@ -1219,7 +1241,7 @@ let lastVoiceChannelId = null;
 let lastGuildId = null;
 
 // Enviar un mensaje de respuesta al rol Developer en canal, o redirigir auditoría al canal de testeo
-async function replyDeveloperOrPrivate(message, text) {
+async function replyDeveloperOrPrivate(message, text, options = {}) {
   const member = message.member;
   
   // Buscar si el usuario tiene el rol 'Developer'
@@ -1228,7 +1250,7 @@ async function replyDeveloperOrPrivate(message, text) {
   if (hasDevRole) {
     // Si tiene el rol Developer, se responde en el chat de texto normal (se borra en 20 segundos)
     try {
-      const msg = await message.reply(text);
+      const msg = await message.reply({ content: typeof text === 'string' ? text : null, ...options });
       setTimeout(() => msg.delete().catch(() => {}), 20000);
     } catch (e) {
       console.error('Error al responder en canal publico:', e);
@@ -1241,7 +1263,8 @@ async function replyDeveloperOrPrivate(message, text) {
     try {
       const testingChannel = await client.channels.fetch(TESTING_CHANNEL_ID);
       if (testingChannel) {
-        testingChannel.send(`⚠️ **Auditoría (No-Developer)**: El usuario **${member ? member.displayName : 'Desconocido'}** intentó ejecutar una acción.\n*Resultado:* Acción procesada en silencio.\n*Detalle:* ${text}`);
+        const auditText = typeof text === 'string' ? text : 'Visualización de Embed Historial';
+        testingChannel.send(`⚠️ **Auditoría (No-Developer)**: El usuario **${member ? member.displayName : 'Desconocido'}** intentó ejecutar una acción.\n*Resultado:* Acción procesada en silencio.\n*Detalle:* ${auditText}`);
       }
     } catch (e) {
       console.error('Error al notificar al canal de testeo:', e);
@@ -1348,14 +1371,19 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
+  // Comando !historial / !history mejorado con embeds estéticos e imágenes de portadas
   if (content === '!historial' || content === '!history') {
     const hist = readJSON(historyFilePath);
     if (hist.length > 0) {
-      let msg = `📜 **Últimas canciones reproducidas**:\n`;
-      hist.slice(-5).reverse().forEach((h, index) => {
-        msg += `${index + 1}. [${h.time}] "${h.title}" de **${h.artist}**\n`;
+      const embeds = hist.slice(-5).reverse().map((h, index) => {
+        return new EmbedBuilder()
+          .setTitle(`${index + 1}. ${h.title}`)
+          .setDescription(`🎤 Artista: **${h.artist}**\n⏱️ Sonado a las: \`${h.time}\``)
+          .setColor(0x1DB954)
+          .setThumbnail(h.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150');
       });
-      await replyDeveloperOrPrivate(message, msg);
+
+      await replyDeveloperOrPrivate(message, null, { embeds: embeds });
     } else {
       await replyDeveloperOrPrivate(message, '📜 Historial de canciones vacío.');
     }
