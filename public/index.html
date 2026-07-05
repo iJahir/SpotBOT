@@ -254,12 +254,47 @@
     .song-artist {
       font-size: 0.9rem;
       color: var(--text-muted);
-      margin-bottom: 18px;
+      margin-bottom: 12px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       width: 100%;
       text-align: center;
+    }
+
+    /* Equalizer Animation CSS */
+    .visualizer-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      gap: 3px;
+      height: 20px;
+      margin-bottom: 18px;
+      opacity: 0.7;
+    }
+
+    .visualizer-bar {
+      width: 3px;
+      background: var(--primary);
+      border-radius: 2px 2px 0 0;
+      height: 3px;
+      transition: height 0.15s ease;
+    }
+
+    .visualizer-container.playing .visualizer-bar {
+      animation: bounceEqualizer 1s ease-in-out infinite alternate;
+    }
+
+    .visualizer-bar:nth-child(2) { animation-delay: 0.1s !important; }
+    .visualizer-bar:nth-child(3) { animation-delay: 0.25s !important; }
+    .visualizer-bar:nth-child(4) { animation-delay: 0.05s !important; }
+    .visualizer-bar:nth-child(5) { animation-delay: 0.3s !important; }
+    .visualizer-bar:nth-child(6) { animation-delay: 0.15s !important; }
+    .visualizer-bar:nth-child(7) { animation-delay: 0.2s !important; }
+
+    @keyframes bounceEqualizer {
+      0% { height: 3px; }
+      100% { height: 20px; }
     }
 
     /* Custom Progress Bar */
@@ -917,6 +952,17 @@
         <div class="song-title" id="songTitle">Esperando reproducción...</div>
         <div class="song-artist" id="songArtist">Conecta Spotify e inicia el bot</div>
 
+        <!-- Ecualizador Animado -->
+        <div class="visualizer-container" id="visualizerContainer">
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+          <div class="visualizer-bar"></div>
+        </div>
+
         <!-- Barra de progreso -->
         <div class="progress-container">
           <div class="progress-bar-bg" id="progressBarBg">
@@ -973,9 +1019,18 @@
         <!-- Panel de Sonidos (Soundboard) -->
         <div class="control-row">
           <span class="control-label">🔊 Panel de Sonido (Soundboard Discord)</span>
-          <div class="search-container">
+          <div class="search-container" style="display: flex; flex-direction: column; gap: 10px;">
             <div class="soundboard-grid" id="soundboardGrid">
               <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; width: 100%; grid-column: 1/-1; padding: 10px 0;">Cargando sonidos del canal...</div>
+            </div>
+            
+            <!-- Campo para sonar audios externos personalizados -->
+            <div style="display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; width: 100%;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">🔗 Sonar audio MP3 personalizado (Internet)</span>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" class="chat-input" id="customSoundUrl" placeholder="Pegar enlace .mp3 directo...">
+                <button class="btn-send" style="height: auto; font-size: 0.8rem;" onclick="playCustomSound()">Sonar URL</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1249,6 +1304,14 @@
           svgPath.innerHTML = '<path d="M8 5v14l11-7z"/>';
         }
 
+        // Ecualizador animado dinámico
+        const viz = document.getElementById('visualizerContainer');
+        if (isPlaying) {
+          viz.classList.add('playing');
+        } else {
+          viz.classList.remove('playing');
+        }
+
         progressMs = data.progressMs;
         durationMs = data.durationMs;
 
@@ -1326,6 +1389,17 @@
       } catch (e) {
         console.error(e);
       }
+    }
+
+    async function playCustomSound() {
+      const urlInput = document.getElementById('customSoundUrl');
+      const url = urlInput.value.trim();
+      if (!url) {
+        showToast('Pega un enlace MP3 válido.');
+        return;
+      }
+      playSound(url, 'Audio Personalizado');
+      urlInput.value = '';
     }
 
     // -----------------------------------------------------------
