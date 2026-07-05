@@ -1007,23 +1007,23 @@
             </select>
           </div>
 
-          <!-- Recordatorios y Pings Rápidos -->
-          <label class="control-label">📢 Programador de Recordatorios y Pings</label>
+          <!-- Recordatorios y Pings Rápidos Avanzados -->
+          <label class="control-label">📢 Programador de Recordatorios y Actividades</label>
           <div class="search-container" style="display: flex; flex-direction: column; gap: 8px;">
             <div style="display: flex; gap: 8px;">
               <select class="channel-select" id="reminderTarget" style="flex: 1;">
                 <option value="@everyone">📢 Mencionar a todos (@everyone)</option>
                 <option value="@here">🔔 Mencionar activos (@here)</option>
               </select>
-              <select class="channel-select" id="reminderTime" style="width: 140px;">
-                <option value="0">Enviar ahora</option>
-                <option value="300000">En 5 Minutos</option>
-                <option value="600000">En 10 Minutos</option>
-              </select>
+              <input type="number" class="chat-input" id="reminderMinutes" style="width: 100px;" placeholder="Minutos" value="0" min="0">
+              <input type="number" class="chat-input" id="reminderDuration" style="width: 100px;" placeholder="Horas" value="1" min="1">
             </div>
             <div style="display: flex; gap: 8px;">
-              <input type="text" class="chat-input" id="reminderMessage" placeholder="Escribe el recordatorio... (ej: ¡Hora de jugar Minecraft!)">
-              <button class="btn-send" style="height: auto;" onclick="scheduleReminder()">Enviar</button>
+              <input type="text" class="chat-input" id="reminderGame" style="flex: 1;" placeholder="🎮 Juego a jugar (Minecraft, etc)">
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" class="chat-input" id="reminderMessage" style="flex: 1;" placeholder="💬 Nota (ej: ¡El server ya está abierto!)">
+              <button class="btn-send" style="height: auto;" onclick="scheduleReminder()">Programar</button>
             </div>
           </div>
 
@@ -1270,11 +1270,13 @@
     // -----------------------------------------------------------
     async function scheduleReminder() {
       const target = document.getElementById('reminderTarget').value;
-      const delayMs = parseInt(document.getElementById('reminderTime').value);
-      const text = document.getElementById('reminderMessage').value.trim();
+      const delayMinutes = parseInt(document.getElementById('reminderMinutes').value) || 0;
+      const durationHours = parseInt(document.getElementById('reminderDuration').value) || 1;
+      const gameActivity = document.getElementById('reminderGame').value.trim();
+      const message = document.getElementById('reminderMessage').value.trim();
       
-      if (!text || !currentChannelId) {
-        showToast('Escribe un mensaje y selecciona un canal');
+      if (!message || !currentChannelId) {
+        showToast('Escribe una nota para el recordatorio');
         return;
       }
 
@@ -1284,18 +1286,17 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             target,
-            message: text,
+            message,
             channelId: currentChannelId,
-            delayMs
+            delayMinutes,
+            gameActivity,
+            durationHours
           })
         });
         if (res.ok) {
-          if (delayMs > 0) {
-            showToast('Recordatorio programado con éxito');
-          } else {
-            showToast('Recordatorio enviado');
-          }
+          showToast(delayMinutes > 0 ? `Recordatorio programado en ${delayMinutes} min.` : 'Recordatorio enviado');
           document.getElementById('reminderMessage').value = '';
+          document.getElementById('reminderGame').value = '';
         } else {
           showToast('Error al programar recordatorio');
         }
@@ -1553,8 +1554,6 @@
       loadMessages();
       loadChannelMembers();
       loadSoundboard(channelId);
-      
-      // Actualizar selectores del recordatorio para añadir menciones por ID de miembros
       loadReminderTargets(channelId);
       
       clearInterval(chatRefreshInterval);
@@ -1567,7 +1566,6 @@
         const members = await res.json();
         const select = document.getElementById('reminderTarget');
         
-        // Conservar las dos opciones por defecto
         select.innerHTML = `
           <option value="@everyone">📢 Mencionar a todos (@everyone)</option>
           <option value="@here">🔔 Mencionar activos (@here)</option>
@@ -1593,7 +1591,7 @@
         
         listContainer.innerHTML = '';
         if (members.length === 0) {
-          listContainer.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">No hay miembros activos en este canal</div>';
+          listContainer.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">No hay miembros con permiso de ver en este canal</div>';
           return;
         }
 

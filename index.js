@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import { exec, spawn } from 'child_process';
 import util from 'util';
 import ffmpegPath from 'ffmpeg-static';
-import { Client, GatewayIntentBits } from 'discord.js';
+import { Client, GatewayIntentBits, PermissionFlagsBits } from 'discord.js';
 import {
   joinVoiceChannel,
   createAudioPlayer,
@@ -669,7 +669,7 @@ app.get('/api/channels/:id/messages', async (req, res) => {
   }
 });
 
-// Obtener los miembros del servidor combinando de forma extremadamente robusta fetch, caché y mensajes
+// Obtener los miembros del servidor validando permisos de lectura del canal
 app.get('/api/channels/:id/members', async (req, res) => {
   const { id } = req.params;
   try {
@@ -680,43 +680,60 @@ app.get('/api/channels/:id/members', async (req, res) => {
     
     const membersMap = new Map();
 
-    // 1. Intentar fetch del servidor
+    // 1. Intentar fetch directo de los miembros del servidor
     try {
       const members = await channel.guild.members.fetch({ limit: 80 });
       members.forEach(m => {
         if (!m.user.bot) {
-          membersMap.set(m.user.id, {
-            username: m.user.username,
-            displayName: m.displayName,
-            avatar: m.user.displayAvatarURL({ size: 64 })
-          });
+          const permissions = channel.permissionsFor(m);
+          if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
+            membersMap.set(m.user.id, {
+              username: m.user.username,
+              displayName: m.displayName,
+              avatar: m.user.displayAvatarURL({ size: 64 })
+            });
+          }
         }
       });
     } catch (e) {
-      // Fallback a la caché local rápida
+      // Fallback a caché local rápida
       channel.guild.members.cache.forEach(m => {
         if (!m.user.bot) {
-          membersMap.set(m.user.id, {
-            username: m.user.username,
-            displayName: m.displayName,
-            avatar: m.user.displayAvatarURL({ size: 64 })
-          });
+          const permissions = channel.permissionsFor(m);
+          if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
+            membersMap.set(m.user.id, {
+              username: m.user.username,
+              displayName: m.displayName,
+              avatar: m.user.displayAvatarURL({ size: 64 })
+            });
+          }
         }
       });
     }
 
-    // 2. Fallback: Extraer autores de los mensajes para asegurar pings de personas chateando
+    // 2. Extraer autores de los últimos mensajes para complementar y asegurar pings chateando
     try {
       const messages = await channel.messages.fetch({ limit: 50 });
-      messages.forEach(msg => {
-        if (!msg.author.bot) {
-          membersMap.set(msg.author.id, {
-            username: msg.author.username,
-            displayName: msg.member ? msg.member.displayName : msg.author.username,
-            avatar: msg.author.displayAvatarURL({ size: 64 })
-          });
+      for (const msg of messages.values()) {
+        if (!msg.author.bot && !membersMap.has(msg.author.id)) {
+          let member = msg.member;
+          if (!member) {
+            try {
+              member = await channel.guild.members.fetch(msg.author.id);
+            } catch (err) {}
+          }
+          if (member) {
+            const permissions = channel.permissionsFor(member);
+            if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
+              membersMap.set(msg.author.id, {
+                username: msg.author.username,
+                displayName: member.displayName,
+                avatar: msg.author.displayAvatarURL({ size: 64 })
+              });
+            }
+          }
         }
-      });
+      }
     } catch (msgErr) {
       console.error('Error al recuperar miembros vía mensajes:', msgErr);
     }
@@ -794,10 +811,10 @@ app.post('/api/soundboard/play', async (req, res) => {
   }
 });
 
-// Endpoint para programar un Recordatorio / Ping rápido
+// Endpoint para programar un Recordatorio / Actividad programada avanzada
 app.post('/api/reminder/schedule', async (req, res) => {
-  const { target, message, channelId, delayMs } = req.body;
-  if (!message || !channelId) {
+  const { target, message, channelId, delayMinutes, gameActivity, durationHours } = req.body;
+  if (!channelId) {
     return res.status(400).json({ error: 'Faltan parámetros.' });
   }
   
@@ -805,19 +822,54 @@ app.post('/api/reminder/schedule', async (req, res) => {
     const channel = await client.channels.fetch(channelId);
     if (!channel) return res.status(404).json({ error: 'Canal no encontrado.' });
     
+    const delayMs = (delayMinutes || 0) * 60 * 1000;
+    
     const sendFn = async () => {
-      // Resolver menciones
       let finalMessage = `${target} ⏰ **Recordatorio**: ${message}`;
+      if (gameActivity) {
+        finalMessage += `\n🎮 **Actividad:** ¡Vamos a jugar a **${gameActivity}**!`;
+      }
+      if (durationHours) {
+        finalMessage += ` durante las próximas **${durationHours} horas**.`;
+      }
+      
       await channel.send({
         content: finalMessage,
         allowedMentions: { parse: ['users', 'roles', 'everyone'] }
       });
-      console.log(`[RECORDATORIO] Enviado a ${target} en canal ${channel.name}`);
+      
+      // Cambiar estado del Bot automáticamente
+      if (gameActivity && client.user) {
+        const originalPresence = client.user.presence;
+        const originalActivity = originalPresence && originalPresence.activities.length > 0 ? originalPresence.activities[0].name : '';
+        const originalStatus = originalPresence ? originalPresence.status : 'online';
+        
+        client.user.setPresence({
+          activities: [{ name: gameActivity, type: 0 }], // type 0 = Playing
+          status: 'online'
+        });
+        console.log(`[RECORDATORIO] Bot puesto a jugar a: ${gameActivity}`);
+        
+        // Restaurar estado al acabar las horas de juego
+        if (durationHours > 0) {
+          setTimeout(() => {
+            if (client.user) {
+              client.user.setPresence({
+                activities: originalActivity ? [{ name: originalActivity, type: 0 }] : [],
+                status: originalStatus
+              });
+              console.log(`[RECORDATORIO] Actividad original restaurada tras cumplirse la sesión.`);
+            }
+          }, durationHours * 60 * 60 * 1000);
+        }
+      }
+      
+      console.log(`[RECORDATORIO] Recordatorio enviado a ${target}`);
     };
     
     if (delayMs > 0) {
       setTimeout(sendFn, delayMs);
-      console.log(`[RECORDATORIO] Programado para dentro de ${delayMs / 1000}s`);
+      console.log(`[RECORDATORIO] Programado para dentro de ${delayMinutes} minutos.`);
     } else {
       await sendFn();
     }
