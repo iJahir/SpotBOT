@@ -205,6 +205,7 @@ async function getValidAccessToken() {
 let currentVolume = 0.5; // Rango de 0 a 1.0 (50% por defecto)
 let currentSpeed = 1.0;  // Velocidad de reproducción (1.0 por defecto)
 let currentAudioResource = null;
+let isSoundboardPlaying = false;
 let currentPlaybackState = {
   title: 'Ninguna canción',
   artist: 'Spotify inactivo',
@@ -302,7 +303,6 @@ app.get('/api/state', (req, res) => {
   currentPlaybackState.voiceConnected = voiceConnection !== null;
   currentPlaybackState.guildName = lastTextChannel ? lastTextChannel.guild.name : (voiceConnection ? client.guilds.cache.get(voiceConnection.joinConfig.guildId)?.name : null);
   
-  // Guardar presencia en el estado actualizable con mapeo para Tipo 4 (Custom Status) vs Tipo 0 (Playing)
   if (client.user) {
     const presence = client.user.presence;
     currentPlaybackState.botStatus = presence ? presence.status : 'online';
@@ -669,7 +669,7 @@ app.get('/api/channels/:id/messages', async (req, res) => {
   }
 });
 
-// Obtener los miembros del servidor de un canal específico con sistema de fallbacks robusto y avatar
+// Obtener los miembros del servidor combinando de forma extremadamente robusta fetch, caché y mensajes
 app.get('/api/channels/:id/members', async (req, res) => {
   const { id } = req.params;
   try {
@@ -678,45 +678,151 @@ app.get('/api/channels/:id/members', async (req, res) => {
       return res.json([]);
     }
     
-    let membersList = [];
+    const membersMap = new Map();
+
+    // 1. Intentar fetch del servidor
     try {
-      // Intentar fetch directo de miembros del servidor
       const members = await channel.guild.members.fetch({ limit: 80 });
-      membersList = members.map(m => ({
-        username: m.user.username,
-        displayName: m.displayName,
-        avatar: m.user.displayAvatarURL({ size: 64 })
-      }));
-    } catch (fetchErr) {
-      // Fallback 1: Usar la caché rápida local
-      membersList = channel.guild.members.cache.map(m => ({
-        username: m.user.username,
-        displayName: m.displayName,
-        avatar: m.user.displayAvatarURL({ size: 64 })
-      }));
-    }
-    
-    // Fallback 2: Si la lista sigue vacía, cargamos los autores únicos de los últimos 50 mensajes del canal
-    if (membersList.length === 0) {
-      try {
-        const messages = await channel.messages.fetch({ limit: 50 });
-        const uniqueAuthors = new Map();
-        messages.forEach(msg => {
-          if (!msg.author.bot) {
-            uniqueAuthors.set(msg.author.id, {
-              username: msg.author.username,
-              displayName: msg.member ? msg.member.displayName : msg.author.username,
-              avatar: msg.author.displayAvatarURL({ size: 64 })
-            });
-          }
-        });
-        membersList = Array.from(uniqueAuthors.values());
-      } catch (msgErr) {
-        console.error('Error al recuperar miembros vía mensajes:', msgErr);
-      }
+      members.forEach(m => {
+        if (!m.user.bot) {
+          membersMap.set(m.user.id, {
+            username: m.user.username,
+            displayName: m.displayName,
+            avatar: m.user.displayAvatarURL({ size: 64 })
+          });
+        }
+      });
+    } catch (e) {
+      // Fallback a la caché local rápida
+      channel.guild.members.cache.forEach(m => {
+        if (!m.user.bot) {
+          membersMap.set(m.user.id, {
+            username: m.user.username,
+            displayName: m.displayName,
+            avatar: m.user.displayAvatarURL({ size: 64 })
+          });
+        }
+      });
     }
 
+    // 2. Fallback: Extraer autores de los mensajes para asegurar pings de personas chateando
+    try {
+      const messages = await channel.messages.fetch({ limit: 50 });
+      messages.forEach(msg => {
+        if (!msg.author.bot) {
+          membersMap.set(msg.author.id, {
+            username: msg.author.username,
+            displayName: msg.member ? msg.member.displayName : msg.author.username,
+            avatar: msg.author.displayAvatarURL({ size: 64 })
+          });
+        }
+      });
+    } catch (msgErr) {
+      console.error('Error al recuperar miembros vía mensajes:', msgErr);
+    }
+
+    const membersList = Array.from(membersMap.values());
     res.json(membersList);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para el Soundboard (Efectos de sonido)
+app.get('/api/channels/:id/soundboard', async (req, res) => {
+  const { id } = req.params;
+  try {
+    const channel = await client.channels.fetch(id);
+    if (!channel || !channel.guild) return res.json([]);
+    
+    // Sonidos meme por defecto
+    const defaultSounds = [
+      { name: 'Airhorn', url: 'https://www.myinstants.com/media/sounds/mlg-airhorn.mp3', emoji: '📢' },
+      { name: 'Bruh', url: 'https://www.myinstants.com/media/sounds/bruh.mp3', emoji: '💀' },
+      { name: 'Violin Triste', url: 'https://www.myinstants.com/media/sounds/sad-violin.mp3', emoji: '🎻' },
+      { name: 'Tada', url: 'https://www.myinstants.com/media/sounds/tada.mp3', emoji: '🎉' }
+    ];
+
+    let guildSounds = [];
+    if (channel.guild.soundboardSounds) {
+      try {
+        const fetched = await channel.guild.soundboardSounds.fetch();
+        guildSounds = fetched.map(s => ({
+          name: s.name,
+          url: s.url,
+          emoji: s.emojiId ? '🔊' : '🔉'
+        }));
+      } catch (err) {
+        console.error('Error al cargar sonidos custom del gremio:', err);
+      }
+    }
+    
+    res.json([...defaultSounds, ...guildSounds]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para sonar un efecto de Soundboard
+app.post('/api/soundboard/play', async (req, res) => {
+  const { url } = req.body;
+  if (!voiceConnection || !audioPlayer) {
+    return res.status(400).json({ error: 'El bot no está en un canal de voz.' });
+  }
+  try {
+    isSoundboardPlaying = true;
+    stopActiveFfmpeg(); // Detener canción actual temporalmente
+    
+    const resource = createAudioResource(url, {
+      inlineVolume: true
+    });
+    resource.volume.setVolume(currentVolume);
+    audioPlayer.play(resource);
+    
+    // Al terminar, volver a activar la sincronización
+    const onIdle = () => {
+      isSoundboardPlaying = false;
+      audioPlayer.off(AudioPlayerStatus.Idle, onIdle);
+      console.log('[SOUNDBOARD] Sonido terminado. Sincronización reanudada.');
+    };
+    audioPlayer.on(AudioPlayerStatus.Idle, onIdle);
+    
+    res.json({ success: true });
+  } catch (e) {
+    isSoundboardPlaying = false;
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para programar un Recordatorio / Ping rápido
+app.post('/api/reminder/schedule', async (req, res) => {
+  const { target, message, channelId, delayMs } = req.body;
+  if (!message || !channelId) {
+    return res.status(400).json({ error: 'Faltan parámetros.' });
+  }
+  
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel) return res.status(404).json({ error: 'Canal no encontrado.' });
+    
+    const sendFn = async () => {
+      // Resolver menciones
+      let finalMessage = `${target} ⏰ **Recordatorio**: ${message}`;
+      await channel.send({
+        content: finalMessage,
+        allowedMentions: { parse: ['users', 'roles', 'everyone'] }
+      });
+      console.log(`[RECORDATORIO] Enviado a ${target} en canal ${channel.name}`);
+    };
+    
+    if (delayMs > 0) {
+      setTimeout(sendFn, delayMs);
+      console.log(`[RECORDATORIO] Programado para dentro de ${delayMs / 1000}s`);
+    } else {
+      await sendFn();
+    }
+    
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -833,7 +939,8 @@ const client = new Client({
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildPresences
+    GatewayIntentBits.GuildPresences,
+    GatewayIntentBits.GuildMembers
   ]
 });
 
@@ -937,7 +1044,7 @@ client.on('messageCreate', async (message) => {
         
         if (newState.status === AudioPlayerStatus.Idle) {
           const token = await getValidAccessToken();
-          if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing) {
+          if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing && !isSoundboardPlaying) {
             logSystemError('ERR-01', 'Pérdida de red o Connection Reset de YouTube (10054). Iniciando reconexión auto-sanable...');
             isSyncing = true;
             setTimeout(async () => {
@@ -1026,7 +1133,7 @@ function stopSyncLoop() {
 }
 
 async function syncSpotifyPlayback(guildId) {
-  if (isSyncing) return;
+  if (isSyncing || isSoundboardPlaying) return;
 
   const token = await getValidAccessToken();
   if (!token || !audioPlayer) {

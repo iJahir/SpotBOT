@@ -429,6 +429,37 @@
       background: var(--primary);
     }
 
+    /* Soundboard Grid */
+    .soundboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 8px;
+      width: 100%;
+    }
+
+    .soundboard-btn {
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--glass-border);
+      color: white;
+      border-radius: 12px;
+      padding: 10px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+
+    .soundboard-btn:hover {
+      background: rgba(29, 185, 84, 0.15);
+      border-color: var(--primary);
+      transform: translateY(-2px);
+    }
+
     /* Buscador */
     .search-container {
       width: 100%;
@@ -911,6 +942,16 @@
           </div>
         </div>
 
+        <!-- Panel de Sonidos (Soundboard) -->
+        <div class="control-row">
+          <span class="control-label">🔊 Panel de Sonido (Soundboard Discord)</span>
+          <div class="search-container">
+            <div class="soundboard-grid" id="soundboardGrid">
+              <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; width: 100%; grid-column: 1/-1; padding: 10px 0;">Cargando sonidos del canal...</div>
+            </div>
+          </div>
+        </div>
+
         <!-- Presencia y Actividad Bot (Juego y Estado) -->
         <div class="control-row">
           <span class="control-label">Actividad y Estado del Bot en Discord</span>
@@ -964,6 +1005,26 @@
             <select class="channel-select" id="channelSelect" onchange="onChannelChanged(this.value)">
               <option value="">Cargando canales...</option>
             </select>
+          </div>
+
+          <!-- Recordatorios y Pings Rápidos -->
+          <label class="control-label">📢 Programador de Recordatorios y Pings</label>
+          <div class="search-container" style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 8px;">
+              <select class="channel-select" id="reminderTarget" style="flex: 1;">
+                <option value="@everyone">📢 Mencionar a todos (@everyone)</option>
+                <option value="@here">🔔 Mencionar activos (@here)</option>
+              </select>
+              <select class="channel-select" id="reminderTime" style="width: 140px;">
+                <option value="0">Enviar ahora</option>
+                <option value="300000">En 5 Minutos</option>
+                <option value="600000">En 10 Minutos</option>
+              </select>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" class="chat-input" id="reminderMessage" placeholder="Escribe el recordatorio... (ej: ¡Hora de jugar Minecraft!)">
+              <button class="btn-send" style="height: auto;" onclick="scheduleReminder()">Enviar</button>
+            </div>
           </div>
 
           <label class="control-label">Bandeja de Entrada</label>
@@ -1158,6 +1219,88 @@
 
       } catch (e) {
         console.error('Error al actualizar el estado:', e);
+      }
+    }
+
+    // -----------------------------------------------------------
+    // SOUNDBOARD
+    // -----------------------------------------------------------
+    async function loadSoundboard(channelId) {
+      if (!channelId) return;
+      try {
+        const res = await fetch(`/api/channels/${channelId}/soundboard`);
+        const sounds = await res.json();
+        const grid = document.getElementById('soundboardGrid');
+        grid.innerHTML = '';
+        
+        sounds.forEach(sound => {
+          const btn = document.createElement('button');
+          btn.className = 'soundboard-btn';
+          btn.onclick = () => playSound(sound.url, sound.name);
+          btn.innerHTML = `
+            <span style="font-size: 1.5rem;">${sound.emoji}</span>
+            <span>${sound.name}</span>
+          `;
+          grid.appendChild(btn);
+        });
+      } catch (e) {
+        console.error('Error al cargar Soundboard:', e);
+      }
+    }
+
+    async function playSound(url, name) {
+      try {
+        const res = await fetch('/api/soundboard/play', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        if (res.ok) {
+          showToast(`Sonando efecto: ${name}`);
+        } else {
+          showToast('Error al reproducir sonido');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // -----------------------------------------------------------
+    // RECORDATORIOS Y PINGS PROGRAMADOS
+    // -----------------------------------------------------------
+    async function scheduleReminder() {
+      const target = document.getElementById('reminderTarget').value;
+      const delayMs = parseInt(document.getElementById('reminderTime').value);
+      const text = document.getElementById('reminderMessage').value.trim();
+      
+      if (!text || !currentChannelId) {
+        showToast('Escribe un mensaje y selecciona un canal');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/reminder/schedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            target,
+            message: text,
+            channelId: currentChannelId,
+            delayMs
+          })
+        });
+        if (res.ok) {
+          if (delayMs > 0) {
+            showToast('Recordatorio programado con éxito');
+          } else {
+            showToast('Recordatorio enviado');
+          }
+          document.getElementById('reminderMessage').value = '';
+        } else {
+          showToast('Error al programar recordatorio');
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
 
@@ -1390,7 +1533,6 @@
           onChannelChanged(currentChannelId);
         } else if (currentChannelId) {
           select.value = currentChannelId;
-          // Solución al Bug de menciones: Forzar ejecución al recargar canales
           onChannelChanged(currentChannelId);
         }
       } catch (e) {
@@ -1410,9 +1552,36 @@
       
       loadMessages();
       loadChannelMembers();
+      loadSoundboard(channelId);
+      
+      // Actualizar selectores del recordatorio para añadir menciones por ID de miembros
+      loadReminderTargets(channelId);
       
       clearInterval(chatRefreshInterval);
       chatRefreshInterval = setInterval(loadMessages, 4000);
+    }
+
+    async function loadReminderTargets(channelId) {
+      try {
+        const res = await fetch(`/api/channels/${channelId}/members`);
+        const members = await res.json();
+        const select = document.getElementById('reminderTarget');
+        
+        // Conservar las dos opciones por defecto
+        select.innerHTML = `
+          <option value="@everyone">📢 Mencionar a todos (@everyone)</option>
+          <option value="@here">🔔 Mencionar activos (@here)</option>
+        `;
+        
+        members.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = `<@${m.username}>`;
+          opt.innerText = `👤 Mencionar a ${m.displayName}`;
+          select.appendChild(opt);
+        });
+      } catch (e) {
+        console.error(e);
+      }
     }
 
     async function loadChannelMembers() {
@@ -1424,7 +1593,7 @@
         
         listContainer.innerHTML = '';
         if (members.length === 0) {
-          listContainer.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">No hay miembros activos en la caché de este canal</div>';
+          listContainer.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">No hay miembros activos en este canal</div>';
           return;
         }
 
