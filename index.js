@@ -1285,7 +1285,6 @@ async function replyDeveloperOrPrivate(message, text, options = {}) {
     try {
       const testingChannel = await client.channels.fetch(TESTING_CHANNEL_ID);
       if (testingChannel) {
-        const auditText = typeof text === 'string' ? text : 'Accion Premium Procesada';
         testingChannel.send({
           content: `⚠️ **Auditoría (No-Developer)**: El usuario **${member ? member.displayName : 'Desconocido'}** ejecutó un comando.\n*Acción procesada en silencio.*`,
           ...options
@@ -1310,11 +1309,19 @@ client.on('ready', async () => {
 
       const channel = await client.channels.fetch(TESTING_CHANNEL_ID);
       if (channel) {
-        channel.send(`¡**He vuelto**! 🚀 He realizado los siguientes cambios en mi sistema:
-🛠️ **Sincronización robusta**: Enrutada vía \`yt-dlp.exe\` para evitar bloqueos.
-🔊 **Audio activado**: Integrado \`opusscript\` para resolver los silencios al cantar.
-⏱️ **Inactividad**: Desconexión automática tras 2 minutos sin sonar música.
-📱 **Panel Web y Móvil**: ¡Lanzado un panel de control interactivo en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración del bot para bajar volumen, buscar, añadir a la cola y mensajear!`);
+        const embed = new EmbedBuilder()
+          .setTitle('🚀 ¡He Vuelto!')
+          .setDescription(
+            `He realizado los siguientes cambios en mi sistema:\n\n` +
+            `🛠️ **Sincronización robusta**: Enrutada vía \`yt-dlp.exe\` para evitar bloqueos.\n` +
+            `🔊 **Audio activado**: Integrado \`opusscript\` para resolver los silencios al cantar.\n` +
+            `⏱️ **Inactividad**: Desconexión automática tras 2 minutos sin sonar música.\n` +
+            `📱 **Panel Web y Móvil**: ¡Lanzado un panel de control interactivo en tu navegador local (http://localhost:5000/) o escaneando el código QR de la consola de administración del bot para bajar volumen, buscar, añadir a la cola y mensajear!`
+          )
+          .setColor(0x1DB954)
+          .setThumbnail(client.user.displayAvatarURL());
+
+        channel.send({ embeds: [embed] });
       }
     } catch (e) {
       console.error('Error al enviar anuncio de reinicio al canal de testeo:', e);
@@ -1523,6 +1530,17 @@ client.on('messageCreate', async (message) => {
 
   if (content === '!joinS') {
     const member = message.member;
+    
+    // Validar si el bot ya se encuentra en un canal de voz
+    if (voiceConnection) {
+      const embed = new EmbedBuilder()
+        .setTitle('⚠️ Ya Conectado')
+        .setDescription('¡Ya estoy en un canal de voz! No puedo unirme a otro canal a la vez.')
+        .setColor(0xe74c3c)
+        .setThumbnail(client.user.displayAvatarURL());
+      return replyDeveloperOrPrivate(message, null, { embeds: [embed] });
+    }
+
     if (!message.member.voice.channel) {
       const embed = new EmbedBuilder()
         .setTitle('❌ Error de Conexión')
@@ -1580,7 +1598,7 @@ client.on('messageCreate', async (message) => {
       if (spotifyAccessToken) {
         joinDescription = `¡Me he unido al canal de voz **${member.voice.channel.name}**!\nSincronización en tiempo real activa con tu cuenta de Spotify.\n\n*Abre el panel en:* http://localhost:5000`;
       } else {
-        joinDescription = `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n\n⚠️ **Sincronización pausada**: Vincula tu cuenta abriendo el enlace de login generado en tu consola o escaneando el código QR.`;
+        joinDescription = `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n\n⚠️ **Sincronización pausada**: Vincula tu cuenta haciendo clic aquí: **[👉 Conectar Cuenta Spotify](${loginUrl})** para activar la reproducción en vivo.`;
       }
 
       const embed = new EmbedBuilder()
@@ -1601,6 +1619,16 @@ client.on('messageCreate', async (message) => {
   }
 
   if (content === '!leaveS') {
+    // Validar si el bot no está en ningún canal
+    if (!voiceConnection) {
+      const embed = new EmbedBuilder()
+        .setTitle('❌ Acción Inválida')
+        .setDescription('No estoy conectado a ningún canal de voz en este momento.')
+        .setColor(0xe74c3c)
+        .setThumbnail(client.user.displayAvatarURL());
+      return replyDeveloperOrPrivate(message, null, { embeds: [embed] });
+    }
+
     cleanupAndLeave();
     const embed = new EmbedBuilder()
       .setTitle('🔇 Desconexión de Voz')
@@ -1654,7 +1682,13 @@ async function autoReconnectToVoice() {
     });
 
     if (lastTextChannel) {
-      lastTextChannel.send(`⚡ **Auto-Reconexión**: He detectado música en tu Spotify y me he vuelto a conectar automáticamente a **${channel.name}**.`);
+      const embed = new EmbedBuilder()
+        .setTitle('⚡ Auto-Reconexión')
+        .setDescription(`He detectado música en tu Spotify y me he vuelto a conectar automáticamente a **${channel.name}**.`)
+        .setColor(0x1DB954)
+        .setThumbnail(client.user.displayAvatarURL());
+
+      lastTextChannel.send({ embeds: [embed] });
     }
   } catch (e) {
     console.error('[AUTO-CONECTAR] Fallo en la auto-reconexión:', e);
@@ -1893,7 +1927,13 @@ function checkInactivity(guildId, isPlaying) {
       inactivityTimeoutId = setTimeout(() => {
         console.log('Desconectando del canal de voz por inactividad de 2 minutos.');
         if (lastTextChannel) {
-          lastTextChannel.send('⚠️ Me he desconectado del canal de voz por inactividad (2 minutos sin reproducir música).');
+          const embed = new EmbedBuilder()
+            .setTitle('⚠️ Desconexión por Inactividad')
+            .setDescription('Me he desconectado del canal de voz por inactividad (2 minutos sin reproducir música).')
+            .setColor(0xe74c3c)
+            .setThumbnail(client.user.displayAvatarURL());
+
+          lastTextChannel.send({ embeds: [embed] });
         }
         cleanupAndLeave();
       }, 120000);
@@ -1997,7 +2037,13 @@ const handleShutdown = async () => {
       // Anuncio de reinicio redirigido directamente al canal de testeo
       const testingChannel = await client.channels.fetch(TESTING_CHANNEL_ID);
       if (testingChannel) {
-        testingChannel.send('⚠️ Me apagaré temporalmente porque mi desarrollador hará algunos ajustes. ¡Vuelvo enseguida!');
+        const embed = new EmbedBuilder()
+          .setTitle('⚠️ Modo Mantenimiento')
+          .setDescription('Me apagaré temporalmente porque mi desarrollador hará algunos ajustes. ¡Vuelvo enseguida!')
+          .setColor(0xe74c3c)
+          .setThumbnail(client.user.displayAvatarURL());
+
+        await testingChannel.send({ embeds: [embed] });
       }
     } catch (e) {
       console.error('Error al guardar estado de salida:', e);
