@@ -1263,8 +1263,11 @@ async function replyDeveloperOrPrivate(message, text, options = {}) {
     try {
       const testingChannel = await client.channels.fetch(TESTING_CHANNEL_ID);
       if (testingChannel) {
-        const auditText = typeof text === 'string' ? text : 'Visualización de Embed Historial';
-        testingChannel.send(`⚠️ **Auditoría (No-Developer)**: El usuario **${member ? member.displayName : 'Desconocido'}** intentó ejecutar una acción.\n*Resultado:* Acción procesada en silencio.\n*Detalle:* ${auditText}`);
+        const auditText = typeof text === 'string' ? text : 'Accion Premium Procesada';
+        testingChannel.send({
+          content: `⚠️ **Auditoría (No-Developer)**: El usuario **${member ? member.displayName : 'Desconocido'}** ejecutó un comando.\n*Acción procesada en silencio.*`,
+          ...options
+        });
       }
     } catch (e) {
       console.error('Error al notificar al canal de testeo:', e);
@@ -1306,7 +1309,13 @@ client.on('messageCreate', async (message) => {
   // COMANDOS DE AUTO-RESPUESTA Y AYUDA INTERACTIVOS (EMBED PREMIUM)
   // -----------------------------------------------------------
   if (content === '!creador') {
-    await replyDeveloperOrPrivate(message, 'Este increíble bot fue desarrollado y creado por **iJahir_x503** 👑.');
+    const embed = new EmbedBuilder()
+      .setTitle('👑 Creador del Bot')
+      .setDescription('Este increíble bot fue desarrollado y creado por **iJahir_x503** 👑.')
+      .setColor(0x1DB954)
+      .setThumbnail(client.user.displayAvatarURL());
+
+    await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     return;
   }
 
@@ -1350,7 +1359,11 @@ client.on('messageCreate', async (message) => {
 
       await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
-      await replyDeveloperOrPrivate(message, '❌ No hay ninguna canción reproduciéndose en este momento.');
+      const embed = new EmbedBuilder()
+        .setTitle('❌ Sin Reproducción')
+        .setDescription('No hay ninguna canción reproduciéndose en este momento.')
+        .setColor(0xe74c3c);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     }
     return;
   }
@@ -1375,7 +1388,11 @@ client.on('messageCreate', async (message) => {
 
       await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
-      await replyDeveloperOrPrivate(message, '📋 La cola de reproducción está vacía.');
+      const embed = new EmbedBuilder()
+        .setTitle('📋 Cola Vacía')
+        .setDescription('La cola de reproducción está vacía.')
+        .setColor(0x1DB954);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     }
     return;
   }
@@ -1384,9 +1401,15 @@ client.on('messageCreate', async (message) => {
     if (currentPlaybackState.title && currentPlaybackState.title !== 'Ninguna canción') {
       let favs = readJSON(favoritesFilePath);
       const exists = favs.some(f => f.title === currentPlaybackState.title && f.artist === currentPlaybackState.artist);
+      let embed;
+      
       if (exists) {
         favs = favs.filter(f => !(f.title === currentPlaybackState.title && f.artist === currentPlaybackState.artist));
-        await replyDeveloperOrPrivate(message, `💔 Eliminado de tus favoritos: "${currentPlaybackState.title}"`);
+        embed = new EmbedBuilder()
+          .setTitle('💔 Favorito Eliminado')
+          .setDescription(`Eliminado de tus favoritos:\n**"${currentPlaybackState.title}"** de *${currentPlaybackState.artist}*`)
+          .setColor(0xe74c3c)
+          .setThumbnail(currentPlaybackState.coverUrl);
       } else {
         favs.push({
           title: currentPlaybackState.title,
@@ -1394,11 +1417,20 @@ client.on('messageCreate', async (message) => {
           coverUrl: currentPlaybackState.coverUrl,
           uri: currentPlaybackState.uri
         });
-        await replyDeveloperOrPrivate(message, `❤️ Añadido a tus favoritos: "${currentPlaybackState.title}" de **${currentPlaybackState.artist}**`);
+        embed = new EmbedBuilder()
+          .setTitle('❤️ Favorito Añadido')
+          .setDescription(`Añadido a tus favoritos:\n**"${currentPlaybackState.title}"** de *${currentPlaybackState.artist}*`)
+          .setColor(0xe91e63)
+          .setThumbnail(currentPlaybackState.coverUrl);
       }
       writeJSON(favoritesFilePath, favs);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
-      await replyDeveloperOrPrivate(message, '❌ No hay ninguna canción activa para añadir a favoritos.');
+      const embed = new EmbedBuilder()
+        .setTitle('❌ Acción Denegada')
+        .setDescription('No hay ninguna canción activa para añadir a favoritos.')
+        .setColor(0xe74c3c);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     }
     return;
   }
@@ -1426,7 +1458,11 @@ client.on('messageCreate', async (message) => {
 
       await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
-      await replyDeveloperOrPrivate(message, '📜 Historial de canciones vacío.');
+      const embed = new EmbedBuilder()
+        .setTitle('📜 Historial Vacío')
+        .setDescription('El historial de canciones está vacío.')
+        .setColor(0x1DB954);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     }
     return;
   }
@@ -1434,15 +1470,31 @@ client.on('messageCreate', async (message) => {
   if (content.startsWith('!loop')) {
     const args = content.split(' ');
     if (args.length < 2) {
-      await replyDeveloperOrPrivate(message, `🔁 **Bucle actual**: \`${loopMode}\` (Elige: \`!loop none\`, \`!loop track\`, \`!loop queue\`)`);
+      const embed = new EmbedBuilder()
+        .setTitle('🔁 Bucle de Reproducción')
+        .setDescription(`Modo de bucle actual: **\`${loopMode}\`**\n*Elige:* \`!loop none\`, \`!loop track\` o \`!loop queue\`.`)
+        .setColor(0x1DB954)
+        .setThumbnail(currentPlaybackState.coverUrl);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
       return;
     }
     const mode = args[1].toLowerCase();
     if (['none', 'track', 'queue'].includes(mode)) {
       loopMode = mode;
-      await replyDeveloperOrPrivate(message, `🔁 Modo de bucle actualizado a: \`${mode}\``);
+      
+      const embed = new EmbedBuilder()
+        .setTitle('🔁 Bucle Actualizado')
+        .setDescription(`Modo de bucle actualizado a: **\`${mode}\`**`)
+        .setColor(0x1DB954)
+        .setThumbnail(currentPlaybackState.coverUrl);
+        
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
-      await replyDeveloperOrPrivate(message, '❌ Modo de bucle no válido. Elige entre `none`, `track` o `queue`.');
+      const embed = new EmbedBuilder()
+        .setTitle('❌ Error')
+        .setDescription('Modo de bucle no válido. Elige entre `none`, `track` o `queue`.')
+        .setColor(0xe74c3c);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     }
     return;
   }
@@ -1450,7 +1502,11 @@ client.on('messageCreate', async (message) => {
   if (content === '!joinS') {
     const member = message.member;
     if (!message.member.voice.channel) {
-      return replyDeveloperOrPrivate(message, 'Debes estar en un canal de voz para usar este comando.');
+      const embed = new EmbedBuilder()
+        .setTitle('❌ Error de Conexión')
+        .setDescription('Debes estar en un canal de voz para usar este comando.')
+        .setColor(0xe74c3c);
+      return replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     }
 
     try {
@@ -1498,23 +1554,38 @@ client.on('messageCreate', async (message) => {
         logSystemError('ERR-04', 'Error controlado en el reproductor de audio de voz.', error);
       });
 
-      let joinMsg = '';
+      let joinDescription = '';
       if (spotifyAccessToken) {
-        joinMsg = `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.\nPuedes abrir el panel de control en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración.`;
+        joinDescription = `¡Me he unido al canal de voz **${member.voice.channel.name}**!\nSincronización en tiempo real activa con tu cuenta de Spotify.\n\n*Abre el panel en:* http://localhost:5000`;
       } else {
-        joinMsg = `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo el enlace de login generado en tu consola (http://localhost:5000/login) o escaneando el código QR.`;
+        joinDescription = `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n\n⚠️ **Sincronización pausada**: Vincula tu cuenta abriendo el enlace de login generado en tu consola o escaneando el código QR.`;
       }
 
-      await replyDeveloperOrPrivate(message, joinMsg);
+      const embed = new EmbedBuilder()
+        .setTitle('🔊 Conectado con Éxito')
+        .setDescription(joinDescription)
+        .setColor(0x1DB954)
+        .setThumbnail(client.user.displayAvatarURL());
+
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } catch (error) {
       logSystemError('ERR-04', 'Excepción crítica al unirse al canal de voz de Discord.', error);
-      await replyDeveloperOrPrivate(message, 'No pude unirme al canal de voz.');
+      const embed = new EmbedBuilder()
+        .setTitle('❌ Error al Conectarse')
+        .setDescription('No pude unirme al canal de voz.')
+        .setColor(0xe74c3c);
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     }
   }
 
   if (content === '!leaveS') {
     cleanupAndLeave();
-    await replyDeveloperOrPrivate(message, 'He salido del canal de voz y la sincronización se ha detenido.');
+    const embed = new EmbedBuilder()
+      .setTitle('🔇 Desconexión de Voz')
+      .setDescription('He salido del canal de voz y la sincronización se ha detenido de forma segura.')
+      .setColor(0xe74c3c)
+      .setThumbnail(client.user.displayAvatarURL());
+    await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
   }
 });
 
