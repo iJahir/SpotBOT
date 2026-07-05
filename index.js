@@ -279,15 +279,9 @@ let currentPlaybackState = {
   isAutoDJ: false,
   isRadioMode: false,
   activeRadioStation: null,
-  isFavorite: false
+  isFavorite: false,
+  uri: ''
 };
-
-// Emisoras de Radio predefinidas
-const radioStations = [
-  { name: 'Lo-Fi Chill Radio', url: 'https://stream.cleaning/lofi', emoji: '☕' },
-  { name: 'Synthwave Live Radio', url: 'https://stream.cleaning/synthwave', emoji: '🌌' },
-  { name: 'Pop Hits Radio', url: 'https://stream.cleaning/pop', emoji: '🎙️' }
-];
 
 // -------------------------------------------------------------
 // SERVIDOR WEB EXPRESS
@@ -646,41 +640,6 @@ app.post('/api/autodj/toggle', (req, res) => {
   res.json({ success: true, isAutoDJ });
 });
 
-// Radio
-app.get('/api/radio/stations', (req, res) => {
-  res.json(radioStations);
-});
-
-app.post('/api/radio/play', async (req, res) => {
-  const { name, url } = req.body;
-  if (!voiceConnection || !audioPlayer) {
-    return res.status(400).json({ error: 'El bot no está en un canal de voz.' });
-  }
-  try {
-    isRadioMode = true;
-    activeRadioStation = name;
-    stopActiveFfmpeg();
-
-    const resource = createAudioResource(url, {
-      inlineVolume: true
-    });
-    resource.volume.setVolume(currentVolume);
-    audioPlayer.play(resource);
-
-    currentPlaybackState.title = name;
-    currentPlaybackState.artist = 'Emisión en vivo (Radio)';
-    currentPlaybackState.coverUrl = 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?w=500';
-    currentPlaybackState.progressMs = 0;
-    currentPlaybackState.durationMs = 0;
-    currentPlaybackState.isPlaying = true;
-
-    console.log(`[RADIO] Reproduciendo emisora: ${name}`);
-    res.json({ success: true });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 // -------------------------------------------------------------
 // ENDPOINT: ESTADO DEL SISTEMA (DASHBOARD)
 // -------------------------------------------------------------
@@ -763,33 +722,6 @@ app.get('/api/system-status', async (req, res) => {
       database: dbStatus
     }
   });
-});
-
-app.post('/api/seek', async (req, res) => {
-  const { seconds, targetMs } = req.body;
-  let newProgressMs = currentPlaybackState.progressMs;
-  
-  if (typeof targetMs === 'number') {
-    newProgressMs = targetMs;
-  } else if (typeof seconds === 'number') {
-    newProgressMs = Math.max(0, Math.min(currentPlaybackState.durationMs, newProgressMs + seconds * 1000));
-  } else {
-    return res.status(400).json({ error: 'Parámetros inválidos.' });
-  }
-
-  currentPlaybackState.progressMs = newProgressMs;
-  lastSyncProgressMs = newProgressMs;
-  lastSyncTimestamp = Date.now();
-
-  console.log(`[API] Seek solicitado a: ${Math.round(newProgressMs / 1000)}s`);
-
-  if (currentYoutubeUrl && voiceConnection && audioPlayer) {
-    isSyncing = true;
-    await streamYoutubeAtProgress(currentYoutubeUrl, newProgressMs, currentPlaybackState.isPlaying);
-    isSyncing = false;
-  }
-  
-  res.json({ success: true, progressMs: newProgressMs });
 });
 
 // Enviar mensajes al canal con búsqueda activa de miembros por nombre en la API de Discord
@@ -1288,6 +1220,10 @@ let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
 let isSyncing = false;
 
+// Memoria persistente del último canal de voz activo para auto-reconexión
+let lastVoiceChannelId = null;
+let lastGuildId = null;
+
 // Enviar un mensaje de respuesta al rol Developer en canal, o redirigir auditoría al canal de testeo
 async function replyDeveloperOrPrivate(message, text) {
   const member = message.member;
@@ -1321,6 +1257,9 @@ async function replyDeveloperOrPrivate(message, text) {
 
 client.on('ready', async () => {
   console.log(`Bot de Discord listo como: ${client.user.tag}`);
+
+  // Iniciar bucle global automático para vigilar Spotify
+  startSyncLoop(TESTING_CHANNEL_ID);
 
   // Anuncio al regresar de cambios directo al canal de testeo solicitado (1523120310809792713)
   if (fs.existsSync(stateFilePath)) {
@@ -1361,8 +1300,8 @@ client.on('messageCreate', async (message) => {
       `• \`!creador\`: Muestra quién es el creador del bot.\n` +
       `• \`!nowplaying\`: Muestra detalles de la canción reproduciéndose ahora en Discord.\n` +
       `• \`!queue\`: Lista las siguientes 5 canciones en la cola de Spotify.\n` +
-      `• \`!fav\`: Añade la canción que está sonando a tus favoritos.\n` +
-      `• \`!historial\` o \`!history\`: Muestra las últimas 5 canciones reproducidas.\n` +
+      `• \`!fav\`: Muestra o guarda favoritos.\n` +
+      `• \`!historial\` o \`!history\`: Lista los últimos 5 temas reproducidos.\n` +
       `• \`!loop\`: Cambia el modo de bucle (none / track / queue).`;
     await replyDeveloperOrPrivate(message, helpText);
     return;
@@ -1403,7 +1342,8 @@ client.on('messageCreate', async (message) => {
         favs.push({
           title: currentPlaybackState.title,
           artist: currentPlaybackState.artist,
-          coverUrl: currentPlaybackState.coverUrl
+          coverUrl: currentPlaybackState.coverUrl,
+          uri: currentPlaybackState.uri
         });
         await replyDeveloperOrPrivate(message, `❤️ Añadido a tus favoritos: "${currentPlaybackState.title}" de **${currentPlaybackState.artist}**`);
       }
@@ -1452,6 +1392,8 @@ client.on('messageCreate', async (message) => {
 
     try {
       lastTextChannel = message.channel;
+      lastVoiceChannelId = member.voice.channel.id;
+      lastGuildId = message.guild.id;
 
       voiceConnection = joinVoiceChannel({
         channelId: member.voice.channel.id,
@@ -1501,7 +1443,6 @@ client.on('messageCreate', async (message) => {
       }
 
       await replyDeveloperOrPrivate(message, joinMsg);
-      startSyncLoop(message.guild.id);
     } catch (error) {
       logSystemError('ERR-04', 'Excepción crítica al unirse al canal de voz de Discord.', error);
       await replyDeveloperOrPrivate(message, 'No pude unirme al canal de voz.');
@@ -1514,8 +1455,57 @@ client.on('messageCreate', async (message) => {
   }
 });
 
+// Función para reconexión automática asíncrona
+async function autoReconnectToVoice() {
+  if (!lastVoiceChannelId || voiceConnection) return;
+  try {
+    const channel = await client.channels.fetch(lastVoiceChannelId);
+    if (!channel) return;
+
+    console.log(`[AUTO-CONECTAR] Uniéndose al canal de voz guardado: ${channel.name}`);
+    
+    voiceConnection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator,
+      selfDeaf: false,
+      selfMute: false
+    });
+
+    audioPlayer = createAudioPlayer();
+    voiceConnection.subscribe(audioPlayer);
+
+    audioPlayer.on('stateChange', async (oldState, newState) => {
+      if (newState.status === AudioPlayerStatus.Idle) {
+        const token = await getValidAccessToken();
+        if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing && !isSoundboardPlaying && !isRadioMode) {
+          isSyncing = true;
+          setTimeout(async () => {
+            try {
+              await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
+            } catch (e) {
+              console.error(e);
+            } finally {
+              isSyncing = false;
+            }
+          }, 1000);
+        }
+      }
+    });
+
+    audioPlayer.on('error', error => {
+      console.error(error);
+    });
+
+    if (lastTextChannel) {
+      lastTextChannel.send(`⚡ **Auto-Reconexión**: He detectado música en tu Spotify y me he vuelto a conectar automáticamente a **${channel.name}**.`);
+    }
+  } catch (e) {
+    console.error('[AUTO-CONECTAR] Fallo en la auto-reconexión:', e);
+  }
+}
+
 function cleanupAndLeave() {
-  stopSyncLoop();
   stopActiveFfmpeg();
   if (inactivityTimeoutId) {
     clearTimeout(inactivityTimeoutId);
@@ -1567,13 +1557,8 @@ async function syncSpotifyPlayback(guildId) {
   if (isSyncing || isSoundboardPlaying || isRadioMode) return;
 
   const token = await getValidAccessToken();
-  // Verificación de seguridad inicial
-  if (!token || !audioPlayer) {
-    checkInactivity(guildId, false);
-    return;
-  }
+  if (!token) return;
 
-  const startFetch = Date.now();
   try {
     const response = await fetch('https://api.spotify.com/v1/me/player', {
       headers: {
@@ -1581,13 +1566,10 @@ async function syncSpotifyPlayback(guildId) {
       }
     });
 
-    spotifyApiLatency = Date.now() - startFetch;
-
-    // Verificación de seguridad tras consulta asíncrona
-    if (!audioPlayer) return;
+    spotifyApiLatency = Date.now() - startSyncLoop; // Estimación rápida de retardo de red de Spotify
 
     if (response.status === 204) {
-      if (audioPlayer.state.status !== AudioPlayerStatus.Idle) {
+      if (audioPlayer && audioPlayer.state.status !== AudioPlayerStatus.Idle) {
         console.log('Spotify inactivo. Pausando reproducción en Discord.');
         audioPlayer.pause();
       }
@@ -1610,6 +1592,16 @@ async function syncSpotifyPlayback(guildId) {
     const artistName = playback.item.artists.map(a => a.name).join(', ');
     const coverUrl = playback.item.album.images[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500';
     const durationMs = playback.item.duration_ms;
+
+    // --- DETECTAR AUTO-RECONEXIÓN SI EL BOT NO ESTÁ EN VOZ ---
+    if (isPlayingOnSpotify && !voiceConnection && lastVoiceChannelId) {
+      await autoReconnectToVoice();
+      // Esperar brevemente a que la conexión asíncrona se establezca antes de proseguir
+      await new Promise(r => setTimeout(r, 1500));
+    }
+
+    // Si sigue sin haber reproductor (ej. no hay canal guardado aún), salir
+    if (!audioPlayer) return;
 
     // Obtener la cola de reproducción actual de Spotify
     let queueList = [];
