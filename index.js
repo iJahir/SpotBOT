@@ -1040,9 +1040,22 @@ app.post('/api/soundboard/play', async (req, res) => {
     isSoundboardPlaying = true;
     stopActiveFfmpeg(); // Detener canción actual temporalmente
     
-    const resource = createAudioResource(url, {
+    // Transmitir y decodificar el MP3/OGG de Discord CDN usando FFmpeg para evitar silencios
+    activeFfmpegProcess = spawn(ffmpegPath, [
+      '-i', url,
+      '-f', 's16le',
+      '-ar', '48000',
+      '-ac', '2',
+      'pipe:1'
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    const resource = createAudioResource(activeFfmpegProcess.stdout, {
+      inputType: StreamType.Raw,
       inlineVolume: true
     });
+    
     resource.volume.setVolume(currentVolume);
     audioPlayer.play(resource);
     
