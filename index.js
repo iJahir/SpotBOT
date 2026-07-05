@@ -217,7 +217,9 @@ let currentPlaybackState = {
   queue: [],
   guildCount: 0,
   voiceConnected: false,
-  guildName: null
+  guildName: null,
+  botStatus: 'online',
+  botActivity: ''
 };
 
 // -------------------------------------------------------------
@@ -298,6 +300,13 @@ app.get('/api/state', (req, res) => {
   currentPlaybackState.guildCount = client.guilds.cache.size;
   currentPlaybackState.voiceConnected = voiceConnection !== null;
   currentPlaybackState.guildName = lastTextChannel ? lastTextChannel.guild.name : (voiceConnection ? client.guilds.cache.get(voiceConnection.joinConfig.guildId)?.name : null);
+  
+  // Guardar presencia en el estado actualizable
+  if (client.user) {
+    const presence = client.user.presence;
+    currentPlaybackState.botStatus = presence ? presence.status : 'online';
+    currentPlaybackState.botActivity = presence && presence.activities.length > 0 ? presence.activities[0].name : '';
+  }
   
   res.json(currentPlaybackState);
 });
@@ -470,6 +479,24 @@ app.post('/api/skip-to-queue', async (req, res) => {
     return res.json({ success: true });
   } catch (e) {
     logSystemError('ERR-02', 'Error al saltar al index de la cola en Spotify.', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para guardar presencia del Bot (Juego y Estado)
+app.post('/api/presence', (req, res) => {
+  const { activity, status } = req.body;
+  if (!client.user) {
+    return res.status(503).json({ error: 'El bot no está listo.' });
+  }
+  try {
+    client.user.setPresence({
+      activities: [{ name: activity, type: 0 }], // type 0 = Playing
+      status: status // 'online', 'idle', 'dnd'
+    });
+    console.log(`[PRESENCIA WEB] Cambiada a juego "${activity}" y estado "${status}"`);
+    res.json({ success: true });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
@@ -791,7 +818,8 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildVoiceStates,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildPresences
   ]
 });
 

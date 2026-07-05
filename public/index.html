@@ -888,6 +888,22 @@
           </div>
         </div>
 
+        <!-- Presencia y Actividad Bot (Juego y Estado) -->
+        <div class="control-row">
+          <span class="control-label">Actividad y Estado del Bot en Discord</span>
+          <div class="search-container" style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 8px;">
+              <input type="text" class="chat-input" id="presenceActivity" placeholder="Actividad (ej: GTA San Andreas)">
+              <select class="channel-select" id="presenceStatus" style="width: 130px;">
+                <option value="online">🟢 Online</option>
+                <option value="idle">🌙 Ausente</option>
+                <option value="dnd">🔴 No Molestar</option>
+              </select>
+            </div>
+            <button class="btn-send" style="width: 100%; font-size: 0.8rem; padding: 10px 0;" onclick="updatePresence()">Guardar Actividad</button>
+          </div>
+        </div>
+
         <!-- Buscador -->
         <div class="control-row">
           <span class="control-label">Buscar y Añadir / Reproducir</span>
@@ -1047,6 +1063,13 @@
         // Nombre del Servidor en el Header
         document.getElementById('headerGuildName').innerText = data.guildName ? ` - ${data.guildName}` : '';
 
+        // Precargar presencia de forma no invasiva (si el usuario no está escribiendo activamente)
+        const presenceInput = document.getElementById('presenceActivity');
+        if (document.activeElement !== presenceInput) {
+          presenceInput.value = data.botActivity || '';
+        }
+        document.getElementById('presenceStatus').value = data.botStatus || 'online';
+
         if (activeTab !== 'reproductor') return;
 
         document.getElementById('songTitle').innerText = data.title;
@@ -1105,6 +1128,25 @@
 
       } catch (e) {
         console.error('Error al actualizar el estado:', e);
+      }
+    }
+
+    async function updatePresence() {
+      const activity = document.getElementById('presenceActivity').value.trim();
+      const status = document.getElementById('presenceStatus').value;
+      try {
+        const res = await fetch('/api/presence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ activity, status })
+        });
+        if (res.ok) {
+          showToast('Presencia actualizada con éxito');
+        } else {
+          showToast('Error al actualizar presencia');
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
 
@@ -1356,7 +1398,6 @@
         members.forEach(member => {
           const badge = document.createElement('span');
           badge.className = 'mention-badge';
-          // Renderizar con avatar si existe
           const avatarHtml = member.avatar ? `<img src="${member.avatar}" alt="Avatar">` : '';
           badge.innerHTML = `${avatarHtml}@${member.displayName}`;
           badge.onclick = () => {
@@ -1391,7 +1432,6 @@
           const wrapper = document.createElement('div');
           wrapper.className = `chat-bubble-wrapper ${isPanel ? 'panel-msg' : ''}`;
 
-          // Cargar avatar del usuario
           const avatarUrl = msg.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png';
           
           wrapper.innerHTML = `
