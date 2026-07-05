@@ -1652,7 +1652,8 @@ async function syncSpotifyPlayback(guildId) {
       isPlaying: isPlayingOnSpotify,
       volume: Math.round(currentVolume * 100),
       speed: currentSpeed,
-      queue: queueList
+      queue: queueList,
+      uri: playback.item.uri
     };
 
     checkInactivity(guildId, isPlayingOnSpotify);

@@ -328,15 +328,24 @@
       margin-top: 8px;
     }
 
-    /* Media Controls */
-    .media-controls {
+    /* Centered Media Controls (Play, Prev, Next) */
+    .main-controls {
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 12px;
-      margin-bottom: 20px;
+      gap: 24px;
+      margin-bottom: 14px;
       width: 100%;
-      flex-wrap: wrap;
+    }
+
+    /* Premium Extra Controls (Row 2) */
+    .premium-controls {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      margin-bottom: 22px;
+      width: 100%;
     }
 
     .btn-ctrl {
@@ -379,8 +388,8 @@
     }
 
     .btn-play-pause {
-      width: 48px;
-      height: 48px;
+      width: 54px;
+      height: 54px;
       background: var(--text);
       color: #0f0f1a;
       border-radius: 50%;
@@ -390,17 +399,24 @@
     .btn-play-pause:hover {
       background: var(--primary);
       color: #ffffff;
+      box-shadow: 0 4px 15px rgba(29, 185, 84, 0.4);
     }
 
     .btn-play-pause svg {
-      width: 20px;
-      height: 20px;
+      width: 22px;
+      height: 22px;
       fill: currentColor;
     }
 
-    .btn-ctrl svg {
-      width: 20px;
-      height: 20px;
+    .btn-ctrl.main-btn svg {
+      width: 24px;
+      height: 24px;
+      fill: currentColor;
+    }
+
+    .btn-ctrl.prem-btn svg {
+      width: 18px;
+      height: 18px;
       fill: currentColor;
     }
 
@@ -1048,13 +1064,9 @@
           </div>
         </div>
 
-        <!-- Controles Multimedia Premium -->
-        <div class="media-controls">
-          <button class="btn-ctrl" onclick="toggleShuffle()" id="btnShuffle" title="Aleatorio (Shuffle)">
-            <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.45 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
-          </button>
-          
-          <button class="btn-ctrl" onclick="spotifyPrevious()" title="Canción anterior">
+        <!-- Fila 1: Controles Multimedia Centrados Principales -->
+        <div class="main-controls">
+          <button class="btn-ctrl main-btn" onclick="spotifyPrevious()" title="Canción anterior">
             <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
 
@@ -1062,24 +1074,31 @@
             <svg viewBox="0 0 24 24" id="svgPlayPause"><path d="M8 5v14l11-7z"/></svg>
           </button>
 
-          <button class="btn-ctrl" onclick="spotifyNext()" title="Siguiente canción">
+          <button class="btn-ctrl main-btn" onclick="spotifyNext()" title="Siguiente canción">
             <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
           </button>
+        </div>
 
-          <button class="btn-ctrl" onclick="stopMusic()" title="Detener Reproducción">
-            <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+        <!-- Fila 2: Controles Premium Auxiliares -->
+        <div class="premium-controls">
+          <button class="btn-ctrl prem-btn" onclick="toggleShuffle()" id="btnShuffle" title="Aleatorio (Shuffle)">
+            <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.45 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
           </button>
-
-          <button class="btn-ctrl" onclick="toggleRepeat()" id="btnRepeat" title="Repetir (Bucle)">
+          
+          <button class="btn-ctrl prem-btn" onclick="toggleRepeat()" id="btnRepeat" title="Repetir (Bucle)">
             <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
           </button>
 
-          <button class="btn-ctrl" onclick="toggleFavorite()" id="btnFav" title="Añadir a Favoritos">
+          <button class="btn-ctrl prem-btn" onclick="toggleFavorite()" id="btnFav" title="Añadir a Favoritos">
             <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
           </button>
 
-          <button class="btn-ctrl" onclick="toggleAutoDJ()" id="btnAutoDJ" title="Modo AutoDJ (Recomendaciones infinitas)">
-            <span style="font-weight: bold; font-size: 0.75rem;">🤖 DJ</span>
+          <button class="btn-ctrl prem-btn" onclick="toggleAutoDJ()" id="btnAutoDJ" title="AutoDJ (Bucle Recomendaciones)">
+            <span style="font-weight: bold; font-size: 0.7rem; border: 1.5px solid currentColor; padding: 2px 4px; border-radius: 4px; line-height: 1;">DJ</span>
+          </button>
+
+          <button class="btn-ctrl prem-btn" onclick="stopMusic()" title="Detener y Salir">
+            <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
           </button>
         </div>
 
@@ -1102,30 +1121,12 @@
           </div>
         </div>
 
-        <!-- Radios En Vivo -->
-        <div class="control-row">
-          <span class="control-label">📻 Emisoras de Radio en vivo</span>
-          <div class="search-container">
-            <div class="soundboard-grid" id="radioGrid">
-              <!-- Cargado dinámicamente -->
-            </div>
-          </div>
-        </div>
-
         <!-- Panel de Sonidos (Soundboard) -->
         <div class="control-row">
           <span class="control-label">🔊 Panel de Sonido (Soundboard Discord)</span>
-          <div class="search-container" style="display: flex; flex-direction: column; gap: 10px;">
+          <div class="search-container">
             <div class="soundboard-grid" id="soundboardGrid">
               <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; width: 100%; grid-column: 1/-1; padding: 10px 0;">Cargando sonidos del canal...</div>
-            </div>
-            
-            <div style="display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; width: 100%;">
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">🔗 Sonar audio MP3 personalizado (Internet)</span>
-              <div style="display: flex; gap: 8px;">
-                <input type="text" class="chat-input" id="customSoundUrl" placeholder="Pegar enlace .mp3 directo...">
-                <button class="btn-send" style="height: auto; font-size: 0.8rem;" onclick="playCustomSound()">Sonar URL</button>
-              </div>
             </div>
           </div>
         </div>
@@ -1617,48 +1618,6 @@
       }
     }
 
-    // -----------------------------------------------------------
-    // CARGAR RADIOS EN VIVO
-    // -----------------------------------------------------------
-    async function loadRadioStations() {
-      try {
-        const res = await fetch('/api/radio/stations');
-        const stations = await res.json();
-        const grid = document.getElementById('radioGrid');
-        grid.innerHTML = '';
-        
-        stations.forEach(st => {
-          const btn = document.createElement('button');
-          btn.className = 'soundboard-btn';
-          btn.onclick = () => playRadio(st.name, st.url);
-          btn.innerHTML = `
-            <span style="font-size: 1.4rem;">${st.emoji}</span>
-            <span>${st.name}</span>
-          `;
-          grid.appendChild(btn);
-        });
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    async function playRadio(name, url) {
-      try {
-        const res = await fetch('/api/radio/play', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name, url })
-        });
-        if (res.ok) {
-          showToast(`Sintonizando Radio: ${name}`);
-        } else {
-          showToast('Error al reproducir la radio.');
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
     // CONTROLES PREMIUM ADICIONALES
     async function toggleShuffle() {
       const active = !document.getElementById('btnShuffle').classList.contains('active');
@@ -1795,17 +1754,6 @@
       }
     }
 
-    async function playCustomSound() {
-      const urlInput = document.getElementById('customSoundUrl');
-      const url = urlInput.value.trim();
-      if (!url) {
-        showToast('Pega un enlace MP3 válido.');
-        return;
-      }
-      playSound(url, 'Audio Personalizado');
-      urlInput.value = '';
-    }
-
     // -----------------------------------------------------------
     // RECORDATORIOS Y PINGS PROGRAMADOS
     // -----------------------------------------------------------
@@ -1891,6 +1839,10 @@
     }
 
     async function playTrackDirectly(uri, title) {
+      if (!uri) {
+        showToast('Error: No se pudo obtener la URI de Spotify.');
+        return;
+      }
       try {
         const res = await fetch('/api/play-track', {
           method: 'POST',
@@ -2404,7 +2356,6 @@
 
     // Bucles principales
     updateState();
-    loadRadioStations();
     setInterval(updateState, 2000);
     setInterval(loadLogs, 3000);
 
