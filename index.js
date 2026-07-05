@@ -1371,19 +1371,28 @@ client.on('messageCreate', async (message) => {
     return;
   }
 
-  // Comando !historial / !history mejorado con embeds estéticos e imágenes de portadas
+  // Comando !historial / !history unificado en un único Embed Premium estilo Jockie Music
   if (content === '!historial' || content === '!history') {
     const hist = readJSON(historyFilePath);
     if (hist.length > 0) {
-      const embeds = hist.slice(-5).reverse().map((h, index) => {
-        return new EmbedBuilder()
-          .setTitle(`${index + 1}. ${h.title}`)
-          .setDescription(`🎤 Artista: **${h.artist}**\n⏱️ Sonado a las: \`${h.time}\``)
-          .setColor(0x1DB954)
-          .setThumbnail(h.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150');
+      const lastSong = hist[hist.length - 1];
+      
+      let description = '';
+      hist.slice(-5).reverse().forEach((h, index) => {
+        description += `**${index + 1}.** [${h.time}] **${h.title}** - *${h.artist}*\n`;
       });
 
-      await replyDeveloperOrPrivate(message, null, { embeds: embeds });
+      const embed = new EmbedBuilder()
+        .setTitle('📜 Historial de canciones reproducidas')
+        .setDescription(description)
+        .setColor(0x1DB954)
+        .setThumbnail(lastSong.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=150')
+        .addFields(
+          { name: 'Total de temas', value: `${Math.min(5, hist.length)}`, inline: true },
+          { name: 'Último éxito', value: `"${lastSong.title}"`, inline: true }
+        );
+
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
       await replyDeveloperOrPrivate(message, '📜 Historial de canciones vacío.');
     }
