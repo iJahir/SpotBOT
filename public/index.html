@@ -73,7 +73,7 @@
 
     .container {
       width: 100%;
-      max-width: 520px;
+      max-width: 540px;
       padding: 20px;
       z-index: 2;
     }
@@ -333,9 +333,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      gap: 16px;
+      gap: 12px;
       margin-bottom: 20px;
       width: 100%;
+      flex-wrap: wrap;
     }
 
     .btn-ctrl {
@@ -347,6 +348,7 @@
       align-items: center;
       justify-content: center;
       transition: transform 0.2s ease, color 0.2s ease;
+      position: relative;
     }
 
     .btn-ctrl:hover {
@@ -354,13 +356,31 @@
       transform: scale(1.1);
     }
 
-    .btn-ctrl:active {
-      transform: scale(0.95);
+    /* Tooltip */
+    .btn-ctrl[title]::after {
+      content: attr(title);
+      position: absolute;
+      bottom: -30px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      font-size: 0.65rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+
+    .btn-ctrl:hover[title]::after {
+      opacity: 1;
     }
 
     .btn-play-pause {
-      width: 52px;
-      height: 52px;
+      width: 48px;
+      height: 48px;
       background: var(--text);
       color: #0f0f1a;
       border-radius: 50%;
@@ -370,19 +390,23 @@
     .btn-play-pause:hover {
       background: var(--primary);
       color: #ffffff;
-      box-shadow: 0 4px 15px rgba(29, 185, 84, 0.4);
     }
 
     .btn-play-pause svg {
-      width: 22px;
-      height: 22px;
+      width: 20px;
+      height: 20px;
       fill: currentColor;
     }
 
-    .btn-seek-side svg, .btn-skip svg {
-      width: 24px;
-      height: 24px;
+    .btn-ctrl svg {
+      width: 20px;
+      height: 20px;
       fill: currentColor;
+    }
+
+    .btn-ctrl.active {
+      color: var(--primary);
+      filter: drop-shadow(0 0 4px var(--primary));
     }
 
     /* Control Rows */
@@ -894,6 +918,54 @@
       gap: 4px;
     }
 
+    /* GRID ESTADO Y HARDWARE */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+
+    .status-card {
+      background: rgba(255,255,255,0.03);
+      border: 1px solid var(--glass-border);
+      padding: 14px;
+      border-radius: 16px;
+      text-align: left;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .status-card-header {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .status-indicator {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .indicator-green { background: #00ff66; box-shadow: 0 0 6px #00ff66; }
+    .indicator-yellow { background: #ffcc00; box-shadow: 0 0 6px #ffcc00; }
+    .indicator-red { background: #ff3333; box-shadow: 0 0 6px #ff3333; }
+
+    .status-card-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: white;
+    }
+
     /* Toast */
     .toast {
       position: fixed;
@@ -936,9 +1008,11 @@
       <!-- Pestañas de Navegación -->
       <div class="tabs-nav">
         <button class="tab-btn active" onclick="switchTab('reproductor')">🎵 Música</button>
-        <button class="tab-btn" onclick="switchTab('chat')">💬 Discord Chat</button>
+        <button class="tab-btn" onclick="switchTab('chat')">💬 Chat</button>
+        <button class="tab-btn" onclick="switchTab('estado')">📊 Estado</button>
+        <button class="tab-btn" onclick="switchTab('historial-fav')">📜 Historial</button>
         <button class="tab-btn" onclick="switchTab('consola')">📟 Terminal</button>
-        <button class="tab-btn" onclick="switchTab('historial')">📋 Historial Log</button>
+        <button class="tab-btn" onclick="switchTab('historial')">📋 Log</button>
       </div>
 
       <!-- PESTAÑA 1: REPRODUCTOR -->
@@ -974,26 +1048,38 @@
           </div>
         </div>
 
-        <!-- Controles Multimedia -->
+        <!-- Controles Multimedia Premium -->
         <div class="media-controls">
-          <button class="btn-ctrl btn-skip" onclick="spotifyPrevious()" title="Canción anterior">
+          <button class="btn-ctrl" onclick="toggleShuffle()" id="btnShuffle" title="Aleatorio (Shuffle)">
+            <svg viewBox="0 0 24 24"><path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.45 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/></svg>
+          </button>
+          
+          <button class="btn-ctrl" onclick="spotifyPrevious()" title="Canción anterior">
             <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
           </button>
 
-          <button class="btn-ctrl btn-seek-side" onclick="seek(-30)" title="-30 segundos">
-            <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8zm-1.63 7.82h-.99v2.24H8.36v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
-          </button>
-
-          <button class="btn-ctrl btn-play-pause" onclick="togglePlayPause()" id="btnPlayPause">
+          <button class="btn-ctrl btn-play-pause" onclick="togglePlayPause()" id="btnPlayPause" title="Reproducir / Pausar">
             <svg viewBox="0 0 24 24" id="svgPlayPause"><path d="M8 5v14l11-7z"/></svg>
           </button>
 
-          <button class="btn-ctrl btn-seek-side" onclick="seek(30)" title="+30 segundos">
-            <svg viewBox="0 0 24 24"><path d="M12 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8zm1.63 7.82h-.99v2.24H11.72v-2.24h-.98v-.76h2.99v.76zm2.7.74c0 .54-.08.97-.24 1.28-.16.31-.38.53-.66.68-.28.14-.61.21-.99.21s-.72-.07-1-.21c-.28-.14-.5-.36-.66-.67-.16-.3-.24-.74-.24-1.29v-.8c0-.53.08-.96.24-1.27.16-.31.39-.53.67-.67.28-.15.61-.22.99-.22s.71.07.99.22c.28.14.5.36.66.67.16.3.24.74.24 1.27v.8zm-.95-.91c0-.36-.04-.62-.12-.77-.08-.15-.2-.23-.37-.23s-.29.08-.37.23c-.08.15-.12.41-.12.77v1.03c0 .35.04.61.12.76.08.15.2.22.37.22s.29-.07.37-.22c.08-.15.12-.41.12-.76v-1.03z"/></svg>
+          <button class="btn-ctrl" onclick="spotifyNext()" title="Siguiente canción">
+            <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
           </button>
 
-          <button class="btn-ctrl btn-skip" onclick="spotifyNext()" title="Siguiente canción">
-            <svg viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6zm9-12h2v12h-2z"/></svg>
+          <button class="btn-ctrl" onclick="stopMusic()" title="Detener Reproducción">
+            <svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+          </button>
+
+          <button class="btn-ctrl" onclick="toggleRepeat()" id="btnRepeat" title="Repetir (Bucle)">
+            <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>
+          </button>
+
+          <button class="btn-ctrl" onclick="toggleFavorite()" id="btnFav" title="Añadir a Favoritos">
+            <svg viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+          </button>
+
+          <button class="btn-ctrl" onclick="toggleAutoDJ()" id="btnAutoDJ" title="Modo AutoDJ (Recomendaciones infinitas)">
+            <span style="font-weight: bold; font-size: 0.75rem;">🤖 DJ</span>
           </button>
         </div>
 
@@ -1016,6 +1102,16 @@
           </div>
         </div>
 
+        <!-- Radios En Vivo -->
+        <div class="control-row">
+          <span class="control-label">📻 Emisoras de Radio en vivo</span>
+          <div class="search-container">
+            <div class="soundboard-grid" id="radioGrid">
+              <!-- Cargado dinámicamente -->
+            </div>
+          </div>
+        </div>
+
         <!-- Panel de Sonidos (Soundboard) -->
         <div class="control-row">
           <span class="control-label">🔊 Panel de Sonido (Soundboard Discord)</span>
@@ -1024,7 +1120,6 @@
               <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; width: 100%; grid-column: 1/-1; padding: 10px 0;">Cargando sonidos del canal...</div>
             </div>
             
-            <!-- Campo para sonar audios externos personalizados -->
             <div style="display: flex; flex-direction: column; gap: 4px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 10px; width: 100%;">
               <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">🔗 Sonar audio MP3 personalizado (Internet)</span>
               <div style="display: flex; gap: 8px;">
@@ -1147,7 +1242,135 @@
         </div>
       </div>
 
-      <!-- PESTAÑA 3: CONSOLA DE SISTEMA -->
+      <!-- PESTAÑA 3: ESTADO DEL SISTEMA -->
+      <div id="tab-estado" class="tab-content">
+        <span class="control-label" style="width:100%;">📊 Centro de Control y Estado del Servidor</span>
+        <div class="status-grid">
+          <!-- CPU -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>Carga CPU</span>
+              <span class="status-indicator" id="indCpu"></span>
+            </div>
+            <div class="status-card-value" id="valCpu">--%</div>
+          </div>
+          <!-- RAM -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>Uso RAM</span>
+              <span class="status-indicator" id="indRam"></span>
+            </div>
+            <div class="status-card-value" id="valRam">--%</div>
+          </div>
+          <!-- Disco -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>Almacenamiento</span>
+              <span class="status-indicator" id="indDisk"></span>
+            </div>
+            <div class="status-card-value" id="valDisk">-- GB</div>
+          </div>
+          <!-- Temperatura -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>Temp. CPU</span>
+              <span class="status-indicator" id="indTemp"></span>
+            </div>
+            <div class="status-card-value" id="valTemp">-- °C</div>
+          </div>
+          <!-- Latencia Node -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>NodeJS Lag</span>
+              <span class="status-indicator" id="indNode"></span>
+            </div>
+            <div class="status-card-value" id="valNode">-- ms</div>
+          </div>
+          <!-- Latencia Spotify -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>Ping Spotify</span>
+              <span class="status-indicator" id="indSpotify"></span>
+            </div>
+            <div class="status-card-value" id="valSpotify">-- ms</div>
+          </div>
+          <!-- Latencia Discord -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>Ping Discord</span>
+              <span class="status-indicator" id="indDiscord"></span>
+            </div>
+            <div class="status-card-value" id="valDiscord">-- ms</div>
+          </div>
+          <!-- Uptime Bot -->
+          <div class="status-card">
+            <div class="status-card-header">
+              <span>Uptime Bot</span>
+              <span class="status-indicator indicator-green"></span>
+            </div>
+            <div class="status-card-value" id="valUptime" style="font-size: 0.95rem;">--:--</div>
+          </div>
+        </div>
+
+        <span class="control-label" style="width:100%;">🩺 Salud de los Servicios</span>
+        <div class="search-container" style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 0;">
+            <span>🤖 Bot de Discord</span>
+            <span class="status-indicator" id="indSvcBot"></span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 0;">
+            <span>🎵 Spotify Web API</span>
+            <span class="status-indicator" id="indSvcSpotify"></span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 0;">
+            <span>🎤 Canal de Voz Discord</span>
+            <span class="status-indicator" id="indSvcVoice"></span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 0;">
+            <span>📺 YouTube Audio Decoder (yt-dlp)</span>
+            <span class="status-indicator" id="indSvcYt"></span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.06); padding: 6px 0;">
+            <span>🌐 WebSocket Connection</span>
+            <span class="status-indicator" id="indSvcWs"></span>
+          </div>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; padding: 6px 0;">
+            <span>📂 Base de Datos (Persistencia JSON)</span>
+            <span class="status-indicator" id="indSvcDb"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 4: HISTORIAL Y FAVORITOS -->
+      <div id="tab-historial-fav" class="tab-content">
+        <span class="control-label" style="width:100%;">📈 Estadísticas del Bot</span>
+        <div style="display: flex; gap: 8px; width: 100%; margin-bottom: 16px;">
+          <div class="status-card" style="flex:1;">
+            <span class="status-card-header">Canciones Cantadas</span>
+            <span class="status-card-value" id="statSongs">--</span>
+          </div>
+          <div class="status-card" style="flex:1;">
+            <span class="status-card-header">Tiempo Sonando</span>
+            <span class="status-card-value" id="statTime">--</span>
+          </div>
+        </div>
+
+        <span class="control-label" style="width:100%;">❤️ Mis Favoritos</span>
+        <div class="queue-container" style="margin-bottom: 16px;">
+          <div class="queue-list" id="favsList">
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">No tienes favoritos agregados</div>
+          </div>
+        </div>
+
+        <span class="control-label" style="width:100%;">📜 Historial de canciones</span>
+        <div class="queue-container">
+          <div class="queue-list" id="histList">
+            <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">Historial vacío</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PESTAÑA 5: CONSOLA DE SISTEMA -->
       <div id="tab-consola" class="tab-content">
         <div class="terminal-container">
           <span class="control-label">Logs en Tiempo Real (Consola Activa)</span>
@@ -1155,7 +1378,7 @@
         </div>
       </div>
 
-      <!-- PESTAÑA 4: ARCHIVO LOG Y ERRORES -->
+      <!-- PESTAÑA 6: ARCHIVO LOG Y ERRORES -->
       <div id="tab-historial" class="tab-content">
         <div class="terminal-container" style="width: 100%;">
           <span class="control-label">Historial del archivo de Logs y Errores (bot.log)</span>
@@ -1206,6 +1429,10 @@
     let activeTab = 'reproductor';
     let currentChannelId = '';
     let chatRefreshInterval = null;
+    let systemStatusInterval = null;
+
+    // Guardar los datos de la canción para favoritos
+    let lastTrackData = { title: '', artist: '', coverUrl: '', uri: '' };
 
     function showToast(message) {
       const toast = document.getElementById('toast');
@@ -1239,6 +1466,19 @@
         chatRefreshInterval = null;
       }
 
+      if (tabId === 'estado') {
+        loadSystemStatus();
+        clearInterval(systemStatusInterval);
+        systemStatusInterval = setInterval(loadSystemStatus, 5000);
+      } else {
+        clearInterval(systemStatusInterval);
+        systemStatusInterval = null;
+      }
+
+      if (tabId === 'historial-fav') {
+        loadHistoryAndFavs();
+      }
+
       if (tabId === 'consola') {
         loadLogs();
       }
@@ -1256,6 +1496,14 @@
         const res = await fetch('/api/state');
         if (!res.ok) return;
         const data = await res.json();
+
+        // Guardar track data local
+        lastTrackData = {
+          title: data.title,
+          artist: data.artist,
+          coverUrl: data.coverUrl,
+          uri: data.uri || ''
+        };
 
         // Barra de estado
         document.getElementById('statusServers').innerText = `Servidores: ${data.guildCount}`;
@@ -1278,6 +1526,27 @@
         }
         document.getElementById('presenceStatus').value = data.botStatus || 'online';
         document.getElementById('presenceType').value = data.botPresenceType || 'playing';
+
+        // Actualizar estados visuales de botones premium
+        document.getElementById('btnShuffle').classList.toggle('active', !!data.isShuffle);
+        document.getElementById('btnAutoDJ').classList.toggle('active', !!data.isAutoDJ);
+        document.getElementById('btnFav').classList.toggle('active', !!data.isFavorite);
+
+        // Actualizar modo repeat
+        const repeatBtn = document.getElementById('btnRepeat');
+        if (data.loopMode === 'track') {
+          repeatBtn.classList.add('active');
+          repeatBtn.title = 'Repetir Canción Activo';
+          repeatBtn.innerHTML = '<span style="font-size:0.6rem; position:absolute; bottom:-2px; right:-2px; font-weight:bold;">1</span><svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
+        } else if (data.loopMode === 'queue') {
+          repeatBtn.classList.add('active');
+          repeatBtn.title = 'Repetir Cola Activo';
+          repeatBtn.innerHTML = '<span style="font-size:0.6rem; position:absolute; bottom:-2px; right:-2px; font-weight:bold;">ALL</span><svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
+        } else {
+          repeatBtn.classList.remove('active');
+          repeatBtn.title = 'Repetir Desactivado';
+          repeatBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/></svg>';
+        }
 
         if (activeTab !== 'reproductor') return;
 
@@ -1345,6 +1614,141 @@
 
       } catch (e) {
         console.error('Error al actualizar el estado:', e);
+      }
+    }
+
+    // -----------------------------------------------------------
+    // CARGAR RADIOS EN VIVO
+    // -----------------------------------------------------------
+    async function loadRadioStations() {
+      try {
+        const res = await fetch('/api/radio/stations');
+        const stations = await res.json();
+        const grid = document.getElementById('radioGrid');
+        grid.innerHTML = '';
+        
+        stations.forEach(st => {
+          const btn = document.createElement('button');
+          btn.className = 'soundboard-btn';
+          btn.onclick = () => playRadio(st.name, st.url);
+          btn.innerHTML = `
+            <span style="font-size: 1.4rem;">${st.emoji}</span>
+            <span>${st.name}</span>
+          `;
+          grid.appendChild(btn);
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function playRadio(name, url) {
+      try {
+        const res = await fetch('/api/radio/play', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, url })
+        });
+        if (res.ok) {
+          showToast(`Sintonizando Radio: ${name}`);
+        } else {
+          showToast('Error al reproducir la radio.');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // CONTROLES PREMIUM ADICIONALES
+    async function toggleShuffle() {
+      const active = !document.getElementById('btnShuffle').classList.contains('active');
+      try {
+        const res = await fetch('/api/shuffle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shuffle: active })
+        });
+        if (res.ok) {
+          showToast(active ? 'Modo aleatorio activado' : 'Modo aleatorio desactivado');
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function toggleRepeat() {
+      const btn = document.getElementById('btnRepeat');
+      let nextMode = 'none';
+      if (!btn.classList.contains('active')) {
+        nextMode = 'track'; // primero repetir canción
+      } else {
+        const span = btn.querySelector('span');
+        if (span && span.innerText === '1') {
+          nextMode = 'queue'; // luego repetir cola
+        } else {
+          nextMode = 'none';
+        }
+      }
+
+      try {
+        const res = await fetch('/api/loop', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mode: nextMode })
+        });
+        if (res.ok) {
+          showToast(`Modo repetición: ${nextMode}`);
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function toggleFavorite() {
+      if (lastTrackData.title === 'Ninguna canción') {
+        showToast('No hay ninguna canción reproduciéndose.');
+        return;
+      }
+      try {
+        const res = await fetch('/api/favorites/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(lastTrackData)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          showToast(data.isFavorite ? 'Añadido a favoritos ❤️' : 'Eliminado de favoritos 💔');
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function toggleAutoDJ() {
+      try {
+        const res = await fetch('/api/autodj/toggle', { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          showToast(data.isAutoDJ ? 'AutoDJ activado 🤖' : 'AutoDJ desactivado');
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function stopMusic() {
+      try {
+        const res = await fetch('/api/stop', { method: 'POST' });
+        if (res.ok) {
+          showToast('Reproducción detenida por completo.');
+          updateState();
+        }
+      } catch (e) {
+        console.error(e);
       }
     }
 
@@ -1810,6 +2214,130 @@
     }
 
     // -----------------------------------------------------------
+    // CARGAR ESTADO DEL SISTEMA (DASHBOARD)
+    // -----------------------------------------------------------
+    async function loadSystemStatus() {
+      try {
+        const res = await fetch('/api/system-status');
+        const data = await res.json();
+
+        // 1. Asignar Valores de hardware
+        document.getElementById('valCpu').innerText = `${data.cpu}%`;
+        document.getElementById('valRam').innerText = `${data.ram}%`;
+        document.getElementById('valDisk').innerText = `${data.disk.used.toFixed(0)} / ${data.disk.total} GB`;
+        document.getElementById('valTemp').innerText = data.temperature;
+        document.getElementById('valNode').innerText = `${data.latency.node} ms`;
+        document.getElementById('valSpotify').innerText = `${data.latency.spotify} ms`;
+        document.getElementById('valDiscord').innerText = `${data.latency.discord} ms`;
+        
+        // formatear uptime bot
+        const upt = data.uptime;
+        const h = Math.floor(upt / 3600);
+        const m = Math.floor((upt % 3600) / 60);
+        const s = upt % 60;
+        document.getElementById('valUptime').innerText = `${h}h ${m}m ${s}s`;
+
+        // 2. Colores del Semáforo
+        setIndicator('indCpu', data.cpu > 75 ? 'Rojo' : (data.cpu > 45 ? 'Amarillo' : 'Verde'));
+        setIndicator('indRam', data.ram > 80 ? 'Rojo' : (data.ram > 55 ? 'Amarillo' : 'Verde'));
+        setIndicator('indDisk', (data.disk.used/data.disk.total) > 0.85 ? 'Rojo' : 'Verde');
+        setIndicator('indTemp', parseInt(data.temperature) > 75 ? 'Rojo' : (parseInt(data.temperature) > 60 ? 'Amarillo' : 'Verde'));
+        setIndicator('indNode', data.latency.node > 150 ? 'Rojo' : (data.latency.node > 50 ? 'Amarillo' : 'Verde'));
+        setIndicator('indSpotify', data.latency.spotify > 600 ? 'Rojo' : (data.latency.spotify > 250 ? 'Amarillo' : 'Verde'));
+        setIndicator('indDiscord', data.latency.discord > 200 ? 'Rojo' : (data.latency.discord > 90 ? 'Amarillo' : 'Verde'));
+
+        // Servicios de Salud
+        setIndicator('indSvcBot', data.status.bot);
+        setIndicator('indSvcSpotify', data.status.spotify);
+        setIndicator('indSvcVoice', data.status.discord);
+        setIndicator('indSvcYt', data.status.youtube);
+        setIndicator('indSvcWs', data.status.websocket);
+        setIndicator('indSvcDb', data.status.database);
+
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function setIndicator(elementId, colorName) {
+      const el = document.getElementById(elementId);
+      if (!el) return;
+      el.className = 'status-indicator';
+      if (colorName === 'Verde') el.classList.add('indicator-green');
+      if (colorName === 'Amarillo') el.classList.add('indicator-yellow');
+      if (colorName === 'Rojo') el.classList.add('indicator-red');
+    }
+
+    // -----------------------------------------------------------
+    // CARGAR HISTORIAL Y FAVORITOS
+    // -----------------------------------------------------------
+    async function loadHistoryAndFavs() {
+      try {
+        // Cargar Estadísticas
+        const statRes = await fetch('/api/stats');
+        const stats = await statRes.json();
+        document.getElementById('statSongs').innerText = stats.totalTracksPlayed || 0;
+        
+        const mins = Math.round((stats.totalPlaySeconds || 0) / 60);
+        document.getElementById('statTime').innerText = `${mins} min`;
+
+        // Cargar Favoritos
+        const favRes = await fetch('/api/favorites');
+        const favs = await favRes.json();
+        const favsContainer = document.getElementById('favsList');
+        favsContainer.innerHTML = '';
+        
+        if (favs.length === 0) {
+          favsContainer.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">No tienes favoritos agregados</div>';
+        } else {
+          favs.forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'queue-item';
+            row.innerHTML = `
+              <img src="${item.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100'}" alt="Cover">
+              <div class="search-item-info">
+                <div class="search-item-title">${item.title}</div>
+                <div class="search-item-artist">${item.artist}</div>
+              </div>
+              <div class="search-actions">
+                <button class="btn-action-music btn-play-now" onclick="playTrackDirectly('${item.uri}', '${item.title.replace(/'/g, "\\'")}')">Sonar</button>
+              </div>
+            `;
+            favsContainer.appendChild(row);
+          });
+        }
+
+        // Cargar Historial
+        const histRes = await fetch('/api/history');
+        const hist = await histRes.json();
+        const histContainer = document.getElementById('histList');
+        histContainer.innerHTML = '';
+
+        if (hist.length === 0) {
+          histContainer.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding: 10px 0;">Historial vacío</div>';
+        } else {
+          hist.slice(-10).reverse().forEach(item => {
+            const row = document.createElement('div');
+            row.className = 'queue-item';
+            row.style.cursor = 'default';
+            row.innerHTML = `
+              <img src="${item.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100'}" alt="Cover">
+              <div class="search-item-info">
+                <div class="search-item-title">${item.title}</div>
+                <div class="search-item-artist">${item.artist}</div>
+              </div>
+              <div style="font-size: 0.7rem; color: var(--text-muted);">${item.time}</div>
+            `;
+            histContainer.appendChild(row);
+          });
+        }
+
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // -----------------------------------------------------------
     // TERMINAL Y LOGS (HISTORIAL)
     // -----------------------------------------------------------
     async function loadLogs() {
@@ -1876,6 +2404,7 @@
 
     // Bucles principales
     updateState();
+    loadRadioStations();
     setInterval(updateState, 2000);
     setInterval(loadLogs, 3000);
 
