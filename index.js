@@ -1303,7 +1303,7 @@ client.on('messageCreate', async (message) => {
   const content = message.content.trim();
 
   // -----------------------------------------------------------
-  // COMANDOS DE AUTO-RESPUESTA Y AYUDA INTERACTIVOS
+  // COMANDOS DE AUTO-RESPUESTA Y AYUDA INTERACTIVOS (EMBED PREMIUM)
   // -----------------------------------------------------------
   if (content === '!creador') {
     await replyDeveloperOrPrivate(message, 'Este increíble bot fue desarrollado y creado por **iJahir_x503** 👑.');
@@ -1311,24 +1311,44 @@ client.on('messageCreate', async (message) => {
   }
 
   if (content === '!help') {
-    const helpText = `📖 **Comandos Disponibles de SpotBOT**:\n` +
-      `• \`!joinS\`: Conecta al bot a tu canal de voz actual.\n` +
-      `• \`!leaveS\`: Desconecta al bot del canal de voz.\n` +
-      `• \`!creador\`: Muestra quién es el creador del bot.\n` +
-      `• \`!nowplaying\`: Muestra detalles de la canción reproduciéndose ahora en Discord.\n` +
-      `• \`!queue\`: Lista las siguientes 5 canciones en la cola de Spotify.\n` +
-      `• \`!fav\`: Muestra o guarda favoritos.\n` +
-      `• \`!historial\` o \`!history\`: Lista los últimos 5 temas reproducidos.\n` +
-      `• \`!loop\`: Cambia el modo de bucle (none / track / queue).`;
-    await replyDeveloperOrPrivate(message, helpText);
+    const embed = new EmbedBuilder()
+      .setTitle('📖 Guía de Comandos de SpotBOT')
+      .setDescription(
+        `• **!joinS**: Conecta al bot a tu canal de voz actual.\n` +
+        `• **!leaveS**: Desconecta al bot del canal de voz.\n` +
+        `• **!creador**: Muestra quién es el creador del bot.\n` +
+        `• **!nowplaying**: Muestra detalles de la canción reproduciéndose ahora en Discord.\n` +
+        `• **!queue**: Lista las siguientes 5 canciones en la cola de Spotify.\n` +
+        `• **!fav**: Muestra o guarda favoritos.\n` +
+        `• **!historial** o **!history**: Lista los últimos 5 temas reproducidos.\n` +
+        `• **!loop**: Cambia el modo de bucle (none / track / queue).`
+      )
+      .setColor(0x1DB954)
+      .setThumbnail(client.user.displayAvatarURL())
+      .setFooter({ text: 'Desarrollado con ❤️ por iJahir_x503 👑' });
+
+    await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     return;
   }
 
   if (content === '!nowplaying') {
     if (currentPlaybackState.title && currentPlaybackState.title !== 'Ninguna canción') {
-      const npText = `🎵 **Sonando Ahora**: "${currentPlaybackState.title}" de **${currentPlaybackState.artist}**\n` +
-        `⏱️ **Progreso**: ${formatTime(currentPlaybackState.progressMs)} / ${formatTime(currentPlaybackState.durationMs)}`;
-      await replyDeveloperOrPrivate(message, npText);
+      const trackUrl = currentPlaybackState.uri ? `https://open.spotify.com/track/${currentPlaybackState.uri.split(':').pop()}` : '';
+      
+      const embed = new EmbedBuilder()
+        .setTitle('🎵 Sonando Ahora')
+        .setDescription(`**${currentPlaybackState.title}**\nde *${currentPlaybackState.artist}*`)
+        .setColor(0x1DB954)
+        .setThumbnail(currentPlaybackState.coverUrl)
+        .addFields(
+          { name: '⏱️ Progreso', value: `\`${formatTime(currentPlaybackState.progressMs)} / ${formatTime(currentPlaybackState.durationMs)}\``, inline: true }
+        );
+
+      if (trackUrl) {
+        embed.addFields({ name: '🔗 Enlace', value: `[Abrir en Spotify](${trackUrl})`, inline: true });
+      }
+
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
       await replyDeveloperOrPrivate(message, '❌ No hay ninguna canción reproduciéndose en este momento.');
     }
@@ -1337,11 +1357,23 @@ client.on('messageCreate', async (message) => {
 
   if (content === '!queue') {
     if (currentPlaybackState.queue && currentPlaybackState.queue.length > 0) {
-      let qText = `📋 **Cola de Spotify (Siguientes canciones)**:\n`;
+      let description = '';
       currentPlaybackState.queue.forEach((track, index) => {
-        qText += `${index + 1}. "${track.title}" de **${track.artist}**\n`;
+        description += `**${index + 1}.** **${track.title}** - *${track.artist}*\n`;
       });
-      await replyDeveloperOrPrivate(message, qText);
+
+      const firstTrack = currentPlaybackState.queue[0];
+
+      const embed = new EmbedBuilder()
+        .setTitle('📋 Cola de Spotify (Siguientes canciones)')
+        .setDescription(description)
+        .setColor(0x1DB954)
+        .setThumbnail(firstTrack.coverUrl || currentPlaybackState.coverUrl)
+        .addFields(
+          { name: 'Temas en espera', value: `\`${currentPlaybackState.queue.length}\``, inline: true }
+        );
+
+      await replyDeveloperOrPrivate(message, null, { embeds: [embed] });
     } else {
       await replyDeveloperOrPrivate(message, '📋 La cola de reproducción está vacía.');
     }
