@@ -293,7 +293,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
 app.get('/login', (req, res) => {
-  const scopes = 'user-read-playback-state user-read-currently-playing user-modify-playback-state';
+  const scopes = 'user-read-playback-state user-read-currently-playing user-modify-playback-state user-library-read user-library-modify';
   const spotifyAuthUrl = 'https://accounts.spotify.com/authorize?' + new URLSearchParams({
     response_type: 'code',
     client_id: SPOTIFY_CLIENT_ID,
@@ -375,10 +375,6 @@ app.get('/api/state', (req, res) => {
       currentPlaybackState.botActivity = '';
     }
   }
-
-  // Comprobar si la canción actual está en favoritos
-  const favs = readJSON(favoritesFilePath);
-  currentPlaybackState.isFavorite = favs.some(f => f.title === currentPlaybackState.title && f.artist === currentPlaybackState.artist);
   
   currentPlaybackState.loopMode = loopMode;
   currentPlaybackState.isShuffle = isShuffle;
@@ -558,8 +554,8 @@ app.post('/api/stop', (req, res) => {
   res.json({ success: true });
 });
 
-// Endpoints de Favoritos
-app.post('/api/favorites/toggle', (req, res) => {
+// Endpoints de Favoritos vinculados bidireccionalmente con la API oficial de Spotify
+app.post('/api/favorites/toggle', async (req, res) => {
   const { title, artist, uri, coverUrl } = req.body;
   if (!title) return res.status(400).json({ error: 'Falta título.' });
   
@@ -568,13 +564,36 @@ app.post('/api/favorites/toggle', (req, res) => {
   
   if (exists) {
     favs = favs.filter(f => !(f.title === title && f.artist === artist));
-    console.log(`[FAVORITOS] Eliminado: ${title} de ${artist}`);
+    console.log(`[FAVORITOS] Eliminado local: ${title} de ${artist}`);
   } else {
     favs.push({ title, artist, uri, coverUrl });
-    console.log(`[FAVORITOS] Añadido: ${title} de ${artist}`);
+    console.log(`[FAVORITOS] Añadido local: ${title} de ${artist}`);
   }
   
   writeJSON(favoritesFilePath, favs);
+
+  // Sincronizar en vivo con Spotify Liked Songs si la canción posee un ID de track válido
+  if (uri && uri.startsWith('spotify:track:')) {
+    const trackId = uri.split(':').pop();
+    const token = await getValidAccessToken();
+    if (token) {
+      try {
+        const method = exists ? 'DELETE' : 'PUT';
+        const syncResponse = await fetch(`https://api.spotify.com/v1/me/tracks?ids=${trackId}`, {
+          method: method,
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (syncResponse.ok) {
+          console.log(`[SPOTIFY FAVORITOS] Sincronización oficial de Spotify completada (Modo: ${method}) para Track ID: ${trackId}`);
+        } else {
+          console.error(`Error al sincronizar favorito en Spotify. Código de estado: ${syncResponse.status}`);
+        }
+      } catch (err) {
+        console.error('Error de red al sincronizar favorito en Spotify:', err);
+      }
+    }
+  }
+  
   res.json({ success: true, isFavorite: !exists });
 });
 
@@ -833,13 +852,12 @@ app.post('/api/queue', async (req, res) => {
   }
 });
 
-// Obtener todos los canales de texto de Discord del bot
+// Obtener todos los canales de texto de Discord del bot usando caché instantánea (Optimizado)
 app.get('/api/channels', async (req, res) => {
   try {
     const channelsList = [];
     for (const [guildId, guild] of client.guilds.cache) {
-      const guildChannels = await guild.channels.fetch();
-      for (const [channelId, channel] of guildChannels) {
+      guild.channels.cache.forEach(channel => {
         if (channel.isTextBased() && channel.type !== 2 && channel.type !== 13) {
           channelsList.push({
             id: channel.id,
@@ -847,7 +865,7 @@ app.get('/api/channels', async (req, res) => {
             guildName: guild.name
           });
         }
-      }
+      });
     }
     res.json(channelsList);
   } catch (e) {
@@ -878,7 +896,7 @@ app.get('/api/channels/:id/messages', async (req, res) => {
   }
 });
 
-// Obtener los miembros del servidor validando permisos de lectura del canal
+// Obtener los miembros del servidor validando permisos de lectura del canal usando caché
 app.get('/api/channels/:id/members', async (req, res) => {
   const { id } = req.params;
   try {
@@ -889,48 +907,26 @@ app.get('/api/channels/:id/members', async (req, res) => {
     
     const membersMap = new Map();
 
-    // 1. Intentar fetch directo de los miembros del servidor
-    try {
-      const members = await channel.guild.members.fetch({ limit: 80 });
-      members.forEach(m => {
-        if (!m.user.bot) {
-          const permissions = channel.permissionsFor(m);
-          if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
-            membersMap.set(m.user.id, {
-              username: m.user.username,
-              displayName: m.displayName,
-              avatar: m.user.displayAvatarURL({ size: 64 })
-            });
-          }
+    // Intentar fetch directo ligero usando caché
+    channel.guild.members.cache.forEach(m => {
+      if (!m.user.bot) {
+        const permissions = channel.permissionsFor(m);
+        if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
+          membersMap.set(m.user.id, {
+            username: m.user.username,
+            displayName: m.displayName,
+            avatar: m.user.displayAvatarURL({ size: 64 })
+          });
         }
-      });
-    } catch (e) {
-      // Fallback a caché local rápida
-      channel.guild.members.cache.forEach(m => {
-        if (!m.user.bot) {
-          const permissions = channel.permissionsFor(m);
-          if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
-            membersMap.set(m.user.id, {
-              username: m.user.username,
-              displayName: m.displayName,
-              avatar: m.user.displayAvatarURL({ size: 64 })
-            });
-          }
-        }
-      });
-    }
+      }
+    });
 
-    // 2. Extraer autores de los últimos mensajes para complementar y asegurar pings chateando
+    // Cargar del historial de mensajes del canal para autocompletado en caché
     try {
-      const messages = await channel.messages.fetch({ limit: 50 });
+      const messages = channel.messages.cache;
       for (const msg of messages.values()) {
         if (!msg.author.bot && !membersMap.has(msg.author.id)) {
-          let member = msg.member;
-          if (!member) {
-            try {
-              member = await channel.guild.members.fetch(msg.author.id);
-            } catch (err) {}
-          }
+          const member = msg.member;
           if (member) {
             const permissions = channel.permissionsFor(member);
             if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
@@ -943,9 +939,7 @@ app.get('/api/channels/:id/members', async (req, res) => {
           }
         }
       }
-    } catch (msgErr) {
-      console.error('Error al recuperar miembros vía mensajes:', msgErr);
-    }
+    } catch (msgErr) {}
 
     const membersList = Array.from(membersMap.values());
     res.json(membersList);
@@ -1559,6 +1553,7 @@ async function syncSpotifyPlayback(guildId) {
   const token = await getValidAccessToken();
   if (!token) return;
 
+  const startFetch = Date.now();
   try {
     const response = await fetch('https://api.spotify.com/v1/me/player', {
       headers: {
@@ -1566,7 +1561,7 @@ async function syncSpotifyPlayback(guildId) {
       }
     });
 
-    spotifyApiLatency = Date.now() - startSyncLoop; // Estimación rápida de retardo de red de Spotify
+    spotifyApiLatency = Date.now() - startFetch; // Cálculo preciso de latencia
 
     if (response.status === 204) {
       if (audioPlayer && audioPlayer.state.status !== AudioPlayerStatus.Idle) {
@@ -1592,6 +1587,20 @@ async function syncSpotifyPlayback(guildId) {
     const artistName = playback.item.artists.map(a => a.name).join(', ');
     const coverUrl = playback.item.album.images[0]?.url || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500';
     const durationMs = playback.item.duration_ms;
+
+    // --- COMPROBAR SI LA CANCIÓN TIENE ME GUSTA EN SPOTIFY (LIKED SONGS) ---
+    let isSpotifyFavorite = false;
+    try {
+      const containsResponse = await fetch(`https://api.spotify.com/v1/me/tracks/contains?ids=${trackId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (containsResponse.ok) {
+        const containsData = await containsResponse.json();
+        isSpotifyFavorite = !!containsData[0];
+      }
+    } catch (e) {
+      // Silencioso
+    }
 
     // --- DETECTAR AUTO-RECONEXIÓN SI EL BOT NO ESTÁ EN VOZ ---
     if (isPlayingOnSpotify && !voiceConnection && lastVoiceChannelId) {
@@ -1645,7 +1654,8 @@ async function syncSpotifyPlayback(guildId) {
       volume: Math.round(currentVolume * 100),
       speed: currentSpeed,
       queue: queueList,
-      uri: playback.item.uri
+      uri: playback.item.uri,
+      isFavorite: isSpotifyFavorite
     };
 
     checkInactivity(guildId, isPlayingOnSpotify);
