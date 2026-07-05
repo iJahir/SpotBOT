@@ -1268,7 +1268,12 @@
           select.appendChild(group);
         }
 
-        if (currentChannelId) {
+        // Auto-selección inteligente: Si no hay canal seleccionado, cargamos el primero automáticamente
+        if (!currentChannelId && channels.length > 0) {
+          currentChannelId = channels[0].id;
+          select.value = currentChannelId;
+          onChannelChanged(currentChannelId);
+        } else if (currentChannelId) {
           select.value = currentChannelId;
         }
       } catch (e) {
