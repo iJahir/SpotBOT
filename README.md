@@ -1,46 +1,98 @@
-# SpotBOT 🎵
+# 🕹️ SpotBOT - Reproductor de Spotify Sincronizado en Discord con Panel Web
 
-SpotBOT es un bot de Discord que se conecta y sincroniza en tiempo real con tu reproducción activa de **Spotify** o tu **Spotify Jam (sesión grupal)**. El bot detecta de inmediato cambios de canciones, pausas, reanudaciones y rebobinados (seeks) en Spotify, y los replica en el canal de voz de Discord transmitiendo directamente desde YouTube.
+SpotBOT es un bot de Discord diseñado y desarrollado para retransmitir y sincronizar la música que estás escuchando en tu cuenta de Spotify (incluyendo Jams y listas de reproducción activas) directamente en un canal de voz de Discord con la máxima calidad de audio y cero latencia. 
 
-## 🚀 Características
-- **Sincronización en tiempo real:** Pollea tu estado de reproducción de Spotify cada 3 segundos.
-- **Detección de Spotify Jams:** Sigue el ritmo del grupo de forma automática si entras en una Jam.
-- **Ajuste de tiempos (Seek):** Si adelantas o atrasas la canción en Spotify, el bot se sincronizará automáticamente.
-- **Fácil inicio de sesión:** Muestra un código QR en consola para iniciar sesión desde tu móvil al instante.
-- **Listo para producción:** Cuenta con endpoints para políticas legales y de interacciones verificadas por firma criptográfica ed25519.
+Incluye un **Panel de Control Glassmorphic interactivo** optimizado para computadoras y celulares, consola en tiempo real, visor de logs, soundboard y programador de actividades.
 
-## 🛠️ Requisitos de Configuración
-Crea un archivo `.env` en la raíz del proyecto basándote en [.env.example](.env.example):
+---
+
+## 🚀 Características Principales
+
+* 🎵 **Sincronización Spotify en Tiempo Real**: Sincroniza la música de tu Spotify con un canal de voz de Discord. Si pausas, adelantas o cambias de canción en tu aplicación de Spotify, el bot lo imita en Discord.
+* 📱 **Panel Web y Móvil Premium**: Controla el volumen, busca y encola canciones, cambia la velocidad de la música (x1.0, x1.5, x2.0) y chatea en Discord desde tu teléfono o computadora.
+* 🔊 **Soundboard Integrado**: Reproduce efectos de sonido instantáneos (MLG Airhorn, Bruh, Sad Violin, Tada) y sonidos nativos de tu servidor pausando temporalmente la música y reanudándola de forma automática al terminar.
+* ⏰ **Programador de Alertas**: Envía menciones programadas (`@everyone`, `@here` o miembros individuales) para avisar de sesiones de juego, cambiando automáticamente la presencia del bot en Discord por la duración que especifiques.
+* 🟢 **Control de Presencia**: Ajusta el estado de conexión del bot (Online, Ausente, No Molestar) y su juego activo directamente desde la web.
+* 🔒 **Rol Developer de Seguridad**: El bot responde públicamente a comandos de voz únicamente si el usuario tiene el rol `Developer`. Para los demás usuarios, procesa en silencio, elimina el mensaje disparador y envía una alerta de auditoría al canal de testeo.
+* 🛡️ **Auto-Reconexión Auto-Sanable**: Detección inteligente de cortes de red en YouTube (`10054`) con reconexión y posicionamiento automático en menos de un segundo.
+
+---
+
+## 🛠️ Requisitos Previos
+
+Antes de montar tu propio bot, asegúrate de tener instalado:
+1. **Node.js** (Versión 18 o superior).
+2. **FFmpeg**: El bot utiliza `ffmpeg-static` de npm por defecto, por lo que se instala automáticamente de forma local. No necesitas instalarlo en el sistema.
+
+---
+
+## ⚙️ Configuración y Credenciales (Archivo `.env`)
+
+Crea un archivo llamado `.env` en la raíz del proyecto. Si otra persona desea montar su propio bot, debe rellenar este archivo con sus credenciales de desarrollador obtenidas en los paneles de Discord y Spotify:
 
 ```env
-DISCORD_TOKEN=tu_token_de_bot
-DISCORD_CLIENT_ID=1523074738157518909
-DISCORD_PUBLIC_KEY=8bb737c75b152009ab06e1043ae22b45d1900f0341a8a16a515fd586649cd59d
-DISCORD_CLIENT_SECRET=tu_discord_client_secret
+# Token del Bot de Discord
+DISCORD_TOKEN=tu_token_de_discord_aqui
 
-SPOTIFY_CLIENT_ID=tu_spotify_client_id
-SPOTIFY_CLIENT_SECRET=tu_spotify_client_secret
-SPOTIFY_REDIRECT_URI=http://localhost:3000/callback
-PORT=3000
+# Credenciales de la Aplicación de Discord (Developer Portal)
+DISCORD_CLIENT_ID=tu_client_id_de_discord
+DISCORD_PUBLIC_KEY=tu_public_key_de_discord
+DISCORD_CLIENT_SECRET=tu_client_secret_de_discord
+
+# Credenciales de la Aplicación de Spotify (Spotify Developer Dashboard)
+SPOTIFY_CLIENT_ID=tu_client_id_de_spotify
+SPOTIFY_CLIENT_SECRET=tu_client_secret_de_spotify
+
+# URI de redirección de Spotify para autenticación (Debe coincidir con la de Spotify Dashboard)
+SPOTIFY_REDIRECT_URI=http://192.168.1.95:5000/callback
+
+# Puerto donde se ejecuta el servidor del panel web
+PORT=5000
 ```
 
-## 💻 Instalación y Ejecución
-1. Instala las dependencias:
+### 1. Cómo obtener las credenciales de Discord:
+1. Ve al [Discord Developer Portal](https://discord.com/developers/applications).
+2. Crea una nueva aplicación y copia el **Application ID** (`DISCORD_CLIENT_ID`) y la **Public Key** (`DISCORD_PUBLIC_KEY`).
+3. Ve a la pestaña **Bot**, genera un token para el bot (`DISCORD_TOKEN`) y activa los **Privileged Gateway Intents**:
+   * *Presence Intent*
+   * *Server Members Intent*
+   * *Message Content Intent*
+4. En **OAuth2**, genera un *Client Secret* (`DISCORD_CLIENT_SECRET`).
+
+### 2. Cómo obtener las credenciales de Spotify:
+1. Ve al [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Crea una aplicación, ponle un nombre y copia el **Client ID** (`SPOTIFY_CLIENT_ID`) y **Client Secret** (`SPOTIFY_CLIENT_SECRET`).
+3. Haz clic en **Edit Settings** y en **Redirect URIs** añade la dirección URI de tu bot (ej: `http://localhost:5000/callback` o `http://192.168.1.95:5000/callback` utilizando tu IP local). Asegúrate de que coincida exactamente con `SPOTIFY_REDIRECT_URI` de tu archivo `.env`.
+
+---
+
+## 📦 Instalación y Despliegue Local
+
+1. Instala todas las dependencias del proyecto ejecutando:
    ```bash
    npm install
    ```
-2. Enciende el bot:
+2. Inicia el bot:
    ```bash
    npm start
    ```
-3. Escanea el código QR que aparece en la consola para conectar tu Spotify.
-4. En Discord, usa los comandos:
-   - `!joinS` - El bot se une a tu canal de voz y empieza a sincronizar.
-   - `!leaveS` - El bot abandona el canal y apaga la sincronización.
-
-## 📄 Enlaces Legales
-- [Condiciones de Servicio y Donaciones](TERMS.md)
-- [Política de Privacidad](PRIVACY.md)
+3. El bot te mostrará tu enlace local en la consola y dibujará un código QR.
+4. **Abrir el Panel:**
+   * **En PC:** Abre `http://localhost:5000` en tu navegador.
+   * **En Celular (Móvil):** Escanea el código QR que se muestra en tu terminal (ambos dispositivos deben estar conectados al mismo Wi-Fi).
+5. **Vincular Spotify:** En el panel, haz clic en **Vincular Spotify** o entra a `http://localhost:5000/login` e inicia sesión con la cuenta de Spotify que vas a retransmitir.
 
 ---
-Desarrollado con ❤️ por [iJahir](https://github.com/iJahir)
+
+## 🎮 Comandos de Discord
+
+El bot escucha los siguientes comandos escritos en cualquier canal de texto de tu servidor:
+
+* `!joinS`: Conecta el bot a tu canal de voz actual de Discord e inicia la sincronización de Spotify en tiempo real.
+* `!leaveS`: Desconecta al bot del canal de voz y detiene el streaming.
+
+---
+
+## 💎 Créditos de Desarrollo
+
+Este bot fue conceptualizado, diseñado y creado con ❤️ por **iJahir_x503**.

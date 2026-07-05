@@ -831,6 +831,34 @@
       letter-spacing: 0.5px;
     }
 
+    /* Quick Guide Box */
+    .guide-box {
+      background: rgba(29, 185, 84, 0.05);
+      border: 1px solid rgba(29, 185, 84, 0.15);
+      border-radius: 16px;
+      padding: 14px;
+      margin-top: 15px;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      width: 100%;
+      text-align: left;
+    }
+
+    .guide-box summary {
+      cursor: pointer;
+      font-weight: bold;
+      color: var(--primary);
+      outline: none;
+    }
+
+    .guide-box ul {
+      margin-left: 18px;
+      margin-top: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
     /* Toast */
     .toast {
       position: fixed;
@@ -1093,6 +1121,23 @@
           </div>
         </div>
       </div>
+
+      <!-- Guía de Ayuda Rápida -->
+      <details class="guide-box">
+        <summary>📖 Guía de Ayuda Rápida (¿Cómo funciona?)</summary>
+        <p style="margin-top: 6px; font-weight: bold; color: white;">Sigue estos sencillos pasos:</p>
+        <ul>
+          <li><b>1. Vincula Spotify:</b> Escanea el código QR de la consola o visita <a href="/login" style="color: var(--primary); text-decoration: none; font-weight: bold;">/login</a> para sincronizar tu cuenta de Spotify.</li>
+          <li><b>2. Conecta a Voz:</b> Entra a un canal de voz en Discord y escribe <code>!joinS</code> en cualquier chat de texto.</li>
+          <li><b>3. ¡A reproducir!:</b> Dale play a cualquier canción en tu Spotify o en una Jam compartida y el bot la cantará automáticamente en Discord al instante.</li>
+          <li><b>4. Desconexión Automática:</b> Si pausas tu Spotify por más de 2 minutos, el bot se desconectará del canal de voz por inactividad de forma segura.</li>
+        </ul>
+      </details>
+
+      <!-- Créditos de Creador -->
+      <footer style="margin-top: 24px; font-size: 0.75rem; color: var(--text-muted); text-align: center; width: 100%;">
+        Creado con ❤️ por <span style="color: var(--primary); font-weight: bold;">iJahir_x503</span>
+      </footer>
 
     </div>
   </div>

@@ -1349,6 +1349,12 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     console.log(`Obteniendo flujo de audio directo de YouTube...`);
     const directAudioUrl = await getDirectAudioUrl(url);
 
+    // Validación de seguridad de desconexión del reproductor
+    if (!audioPlayer) {
+      console.log('El reproductor de audio se desconectó durante la resolución de red de YouTube. Transmisión cancelada.');
+      return;
+    }
+
     console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds} (PCM Crudo, Velocidad: x${currentSpeed})...`);
     
     const ffmpegArgs = [
