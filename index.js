@@ -995,15 +995,15 @@ app.get('/api/channels/:id/members', async (req, res) => {
 app.get('/api/channels/:id/soundboard', async (req, res) => {
   const { id } = req.params;
   try {
-    // Sonidos meme por defecto
+    // Los 6 sonidos oficiales por defecto de Discord
     const defaultSounds = [
-      { name: 'Airhorn', url: 'https://www.myinstants.com/media/sounds/mlg-airhorn.mp3', emoji: '📢' },
-      { name: 'Bruh', url: 'https://www.myinstants.com/media/sounds/bruh.mp3', emoji: '💀' },
-      { name: 'Violin Triste', url: 'https://www.myinstants.com/media/sounds/sad-violin.mp3', emoji: '🎻' },
-      { name: 'Tada', url: 'https://www.myinstants.com/media/sounds/tada.mp3', emoji: '🎉' }
+      { name: 'quack', url: 'https://cdn.discordapp.com/soundboard-sounds/1', emoji: '🦆' },
+      { name: 'airhorn', url: 'https://cdn.discordapp.com/soundboard-sounds/2', emoji: '📢' },
+      { name: 'cricket', url: 'https://cdn.discordapp.com/soundboard-sounds/3', emoji: '🦗' },
+      { name: 'golf clap', url: 'https://cdn.discordapp.com/soundboard-sounds/4', emoji: '👏' },
+      { name: 'sad horn', url: 'https://cdn.discordapp.com/soundboard-sounds/5', emoji: '📯' },
+      { name: 'ba dum tss', url: 'https://cdn.discordapp.com/soundboard-sounds/6', emoji: '🥁' }
     ];
-
-    const customSounds = readJSON(soundboardFilePath);
 
     let guildSounds = [];
     const channel = await client.channels.fetch(id).catch(() => null);
@@ -1024,34 +1024,10 @@ app.get('/api/channels/:id/soundboard', async (req, res) => {
       }
     }
     
-    res.json([...defaultSounds, ...customSounds, ...guildSounds]);
+    res.json([...defaultSounds, ...guildSounds]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
-});
-
-// Endpoint para guardar un sonido de Soundboard personalizado
-app.post('/api/soundboard/add', (req, res) => {
-  const { name, url, emoji } = req.body;
-  if (!name || !url) return res.status(400).json({ error: 'Faltan parámetros.' });
-  
-  const customSounds = readJSON(soundboardFilePath);
-  customSounds.push({ name, url, emoji: emoji || '🔊', isCustom: true });
-  writeJSON(soundboardFilePath, customSounds);
-  
-  res.json({ success: true });
-});
-
-// Endpoint para eliminar un sonido personalizado
-app.post('/api/soundboard/delete', (req, res) => {
-  const { name } = req.body;
-  if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
-  
-  let customSounds = readJSON(soundboardFilePath);
-  customSounds = customSounds.filter(s => s.name !== name);
-  writeJSON(soundboardFilePath, customSounds);
-  
-  res.json({ success: true });
 });
 
 // Endpoint para sonar un efecto de Soundboard
