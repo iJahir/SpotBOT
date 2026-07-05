@@ -48,6 +48,9 @@ if (!DISCORD_TOKEN || !SPOTIFY_CLIENT_ID || !SPOTIFY_CLIENT_SECRET || !SPOTIFY_R
   process.exit(1);
 }
 
+// Canal de testeo por defecto solicitado por el usuario
+const TESTING_CHANNEL_ID = '1523120310809792713';
+
 // -------------------------------------------------------------
 // SISTEMA DE LOGS Y CONSOLA EN TIEMPO REAL CON CÓDIGOS DE ERROR
 // -------------------------------------------------------------
@@ -798,7 +801,7 @@ let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
 let isSyncing = false;
 
-// Enviar un mensaje de respuesta privado (DM) o público en canal según rol Developer
+// Enviar un mensaje de respuesta al rol Developer en canal, o redirigir auditoría al canal de testeo
 async function replyDeveloperOrPrivate(message, text) {
   const member = message.member;
   
@@ -806,24 +809,25 @@ async function replyDeveloperOrPrivate(message, text) {
   const hasDevRole = member && member.roles.cache.some(role => role.name.toLowerCase() === 'developer');
 
   if (hasDevRole) {
-    // Si tiene el rol Developer, se responde en el canal de texto normal
+    // Si tiene el rol Developer, se responde en el chat de texto normal (se borra en 20 segundos)
     try {
       const msg = await message.reply(text);
-      // Auto-eliminar a los 20s para mantener el chat limpio
       setTimeout(() => msg.delete().catch(() => {}), 20000);
     } catch (e) {
       console.error('Error al responder en canal publico:', e);
     }
   } else {
-    // Si no tiene el rol, se envía como mensaje privado (DM) y se borra el comando disparador
+    // Si no es developer, borramos su comando disparador de inmediato
+    await message.delete().catch(() => {});
+    
+    // Y redirigimos la alerta al canal de testeo (ID: 1523120310809792713)
     try {
-      await message.author.send(text);
-      await message.delete().catch(() => {});
+      const testingChannel = await client.channels.fetch(TESTING_CHANNEL_ID);
+      if (testingChannel) {
+        testingChannel.send(`⚠️ **Auditoría (No-Developer)**: El usuario **${member ? member.displayName : 'Desconocido'}** intentó ejecutar una acción.\n*Resultado:* Acción procesada en silencio.\n*Detalle:* ${text}`);
+      }
     } catch (e) {
-      // Si el usuario tiene los DMs cerrados, responder temporalmente y borrar
-      const tempMsg = await message.reply('⚠️ Te he enviado la información por mensaje privado (DM). Habilita tus DMs si no te llegó.');
-      setTimeout(() => tempMsg.delete().catch(() => {}), 10000);
-      await message.delete().catch(() => {});
+      console.error('Error al notificar al canal de testeo:', e);
     }
   }
 }
@@ -831,24 +835,21 @@ async function replyDeveloperOrPrivate(message, text) {
 client.on('ready', async () => {
   console.log(`Bot de Discord listo como: ${client.user.tag}`);
 
-  // Anuncio al regresar de cambios (sin revelar IPs locales a Discord)
+  // Anuncio al regresar de cambios directo al canal de testeo solicitado (1523120310809792713)
   if (fs.existsSync(stateFilePath)) {
     try {
-      const state = JSON.parse(fs.readFileSync(stateFilePath, 'utf8'));
       fs.unlinkSync(stateFilePath);
 
-      if (state.channelId) {
-        const channel = await client.channels.fetch(state.channelId);
-        if (channel) {
-          channel.send(`¡**He vuelto**! 🚀 He realizado los siguientes cambios en mi sistema:
+      const channel = await client.channels.fetch(TESTING_CHANNEL_ID);
+      if (channel) {
+        channel.send(`¡**He vuelto**! 🚀 He realizado los siguientes cambios en mi sistema:
 🛠️ **Sincronización robusta**: Enrutada vía \`yt-dlp.exe\` para evitar bloqueos.
 🔊 **Audio activado**: Integrado \`opusscript\` para resolver los silencios al cantar.
 ⏱️ **Inactividad**: Desconexión automática tras 2 minutos sin sonar música.
 📱 **Panel Web y Móvil**: ¡Lanzado un panel de control interactivo en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración del bot para bajar volumen, buscar, añadir a la cola y mensajear!`);
-        }
       }
     } catch (e) {
-      console.error('Error al restaurar estado de canal:', e);
+      console.error('Error al enviar anuncio de reinicio al canal de testeo:', e);
     }
   }
 });
@@ -861,7 +862,6 @@ client.on('messageCreate', async (message) => {
   if (content === '!joinS') {
     const member = message.member;
     if (!message.member.voice.channel) {
-      // Responder privado/público según Developer
       return replyDeveloperOrPrivate(message, 'Debes estar en un canal de voz para usar este comando.');
     }
 
@@ -1198,7 +1198,12 @@ const handleShutdown = async () => {
   if (lastTextChannel) {
     try {
       fs.writeFileSync(stateFilePath, JSON.stringify({ channelId: lastTextChannel.id }), 'utf8');
-      await lastTextChannel.send('⚠️ Me apagaré temporalmente porque mi desarrollador hará algunos ajustes. ¡Vuelvo enseguida!');
+      
+      // Anuncio de reinicio redirigido directamente al canal de testeo
+      const testingChannel = await client.channels.fetch(TESTING_CHANNEL_ID);
+      if (testingChannel) {
+        testingChannel.send('⚠️ Me apagaré temporalmente porque mi desarrollador hará algunos ajustes. ¡Vuelvo enseguida!');
+      }
     } catch (e) {
       console.error('Error al guardar estado de salida:', e);
     }
