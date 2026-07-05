@@ -1009,22 +1009,40 @@
 
           <!-- Recordatorios y Pings Rápidos Avanzados -->
           <label class="control-label">📢 Programador de Recordatorios y Actividades</label>
-          <div class="search-container" style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; gap: 8px;">
-              <select class="channel-select" id="reminderTarget" style="flex: 1;">
+          <div class="search-container" style="display: flex; flex-direction: column; gap: 10px;">
+            
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">¿A quién mencionar?</span>
+              <select class="channel-select" id="reminderTarget">
                 <option value="@everyone">📢 Mencionar a todos (@everyone)</option>
                 <option value="@here">🔔 Mencionar activos (@here)</option>
               </select>
-              <input type="number" class="chat-input" id="reminderMinutes" style="width: 100px;" placeholder="Minutos" value="0" min="0">
-              <input type="number" class="chat-input" id="reminderDuration" style="width: 100px;" placeholder="Horas" value="1" min="1">
             </div>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" class="chat-input" id="reminderGame" style="flex: 1;" placeholder="🎮 Juego a jugar (Minecraft, etc)">
+
+            <div style="display: flex; gap: 8px; width: 100%;">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">¿En cuántos minutos avisar?</span>
+                <input type="number" class="chat-input" id="reminderMinutes" placeholder="Ej: 5 (0 = Ahora)" value="0" min="0" style="width: 100%;">
+              </div>
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 4px;">
+                <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">¿Horas de juego?</span>
+                <input type="number" class="chat-input" id="reminderDuration" placeholder="Ej: 2 horas" value="1" min="1" style="width: 100%;">
+              </div>
             </div>
-            <div style="display: flex; gap: 8px;">
-              <input type="text" class="chat-input" id="reminderMessage" style="flex: 1;" placeholder="💬 Nota (ej: ¡El server ya está abierto!)">
-              <button class="btn-send" style="height: auto;" onclick="scheduleReminder()">Programar</button>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">🎮 Juego a Jugar (Minecraft, GTA, etc.)</span>
+              <input type="text" class="chat-input" id="reminderGame" placeholder="Escribe el nombre del juego (opcional)...">
             </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">💬 Mensaje / Nota adicional</span>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" class="chat-input" id="reminderMessage" placeholder="Ej: ¡El server ya está encendido! (Obligatorio)">
+                <button class="btn-send" style="height: 48px;" onclick="scheduleReminder()">Programar</button>
+              </div>
+            </div>
+
           </div>
 
           <label class="control-label">Bandeja de Entrada</label>
