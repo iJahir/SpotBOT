@@ -35,6 +35,7 @@ const logFilePath = path.join(__dirname, 'bot.log');
 const favoritesFilePath = path.join(__dirname, 'favorites.json');
 const historyFilePath = path.join(__dirname, 'history.json');
 const statsFilePath = path.join(__dirname, 'stats.json');
+const soundboardFilePath = path.join(__dirname, 'soundboard.json');
 
 // Comprobar variables de entorno
 const {
@@ -82,6 +83,7 @@ function writeJSON(file, data) {
 if (!fs.existsSync(favoritesFilePath)) writeJSON(favoritesFilePath, []);
 if (!fs.existsSync(historyFilePath)) writeJSON(historyFilePath, []);
 if (!fs.existsSync(statsFilePath)) writeJSON(statsFilePath, { totalPlaySeconds: 0, totalTracksPlayed: 0 });
+if (!fs.existsSync(soundboardFilePath)) writeJSON(soundboardFilePath, []);
 
 // Lógica autolimpiadora: Filtrar y quitar emisoras de radio que se hayan guardado previamente en favoritos o historial
 function cleanRadioFromJSON() {
@@ -993,9 +995,6 @@ app.get('/api/channels/:id/members', async (req, res) => {
 app.get('/api/channels/:id/soundboard', async (req, res) => {
   const { id } = req.params;
   try {
-    const channel = await client.channels.fetch(id);
-    if (!channel || !channel.guild) return res.json([]);
-    
     // Sonidos meme por defecto
     const defaultSounds = [
       { name: 'Airhorn', url: 'https://www.myinstants.com/media/sounds/mlg-airhorn.mp3', emoji: '📢' },
@@ -1004,24 +1003,55 @@ app.get('/api/channels/:id/soundboard', async (req, res) => {
       { name: 'Tada', url: 'https://www.myinstants.com/media/sounds/tada.mp3', emoji: '🎉' }
     ];
 
+    const customSounds = readJSON(soundboardFilePath);
+
     let guildSounds = [];
-    if (channel.guild.soundboardSounds) {
+    const channel = await client.channels.fetch(id).catch(() => null);
+    if (channel && channel.guild && channel.guild.soundboardSounds) {
       try {
         const fetched = await channel.guild.soundboardSounds.fetch();
-        guildSounds = fetched.map(s => ({
-          name: s.name,
-          url: s.url,
-          emoji: s.emojiId ? '🔊' : '🔉'
-        }));
+        guildSounds = fetched.map(s => {
+          const soundId = s.soundId || s.id;
+          const url = s.url || `https://cdn.discordapp.com/soundboard-sounds/${soundId}`;
+          return {
+            name: s.name,
+            url: url,
+            emoji: s.emojiName || (s.emojiId ? '🔊' : '🔉')
+          };
+        });
       } catch (err) {
         console.error('Error al cargar sonidos custom del gremio:', err);
       }
     }
     
-    res.json([...defaultSounds, ...guildSounds]);
+    res.json([...defaultSounds, ...customSounds, ...guildSounds]);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Endpoint para guardar un sonido de Soundboard personalizado
+app.post('/api/soundboard/add', (req, res) => {
+  const { name, url, emoji } = req.body;
+  if (!name || !url) return res.status(400).json({ error: 'Faltan parámetros.' });
+  
+  const customSounds = readJSON(soundboardFilePath);
+  customSounds.push({ name, url, emoji: emoji || '🔊', isCustom: true });
+  writeJSON(soundboardFilePath, customSounds);
+  
+  res.json({ success: true });
+});
+
+// Endpoint para eliminar un sonido personalizado
+app.post('/api/soundboard/delete', (req, res) => {
+  const { name } = req.body;
+  if (!name) return res.status(400).json({ error: 'Falta el nombre.' });
+  
+  let customSounds = readJSON(soundboardFilePath);
+  customSounds = customSounds.filter(s => s.name !== name);
+  writeJSON(soundboardFilePath, customSounds);
+  
+  res.json({ success: true });
 });
 
 // Endpoint para sonar un efecto de Soundboard

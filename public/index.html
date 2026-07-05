@@ -1123,7 +1123,21 @@
 
         <!-- Panel de Sonidos (Soundboard) -->
         <div class="control-row">
-          <span class="control-label">🔊 Panel de Sonido (Soundboard Discord)</span>
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <span class="control-label" style="margin-bottom: 0;">🔊 Panel de Sonidos (Soundboard Discord)</span>
+            <button class="btn-send" style="padding: 4px 8px; font-size: 0.7rem; height: auto;" onclick="toggleAddSoundForm()">+ Añadir Sonido</button>
+          </div>
+          
+          <!-- Formulario Oculto para Añadir Sonidos Custom -->
+          <div id="addSoundForm" style="display: none; background: rgba(0,0,0,0.2); border: 1px dashed var(--glass-border); padding: 10px; border-radius: 12px; margin-bottom: 10px; flex-direction: column; gap: 8px;">
+            <div style="display: flex; gap: 6px;">
+              <input type="text" class="chat-input" id="soundNameInput" placeholder="Nombre (Ej: Bruh)" style="flex: 2; height: 32px; font-size: 0.8rem; padding: 0 8px;">
+              <input type="text" class="chat-input" id="soundEmojiInput" placeholder="Emoji (Ej: 🔊)" style="flex: 1; height: 32px; font-size: 0.8rem; padding: 0 8px; text-align: center;">
+            </div>
+            <input type="text" class="chat-input" id="soundUrlInput" placeholder="URL del MP3" style="height: 32px; font-size: 0.8rem; padding: 0 8px;">
+            <button class="btn-send" style="height: 32px; font-size: 0.8rem; width: 100%;" onclick="addCustomSound()">Guardar Sonido</button>
+          </div>
+
           <div class="search-container">
             <div class="soundboard-grid" id="soundboardGrid">
               <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; width: 100%; grid-column: 1/-1; padding: 10px 0;">Cargando sonidos del canal...</div>
@@ -1723,14 +1737,52 @@
         grid.innerHTML = '';
         
         sounds.forEach(sound => {
+          const wrapper = document.createElement('div');
+          wrapper.style.position = 'relative';
+          wrapper.style.display = 'inline-block';
+          wrapper.style.width = '100%';
+
           const btn = document.createElement('button');
           btn.className = 'soundboard-btn';
+          btn.style.width = '100%';
           btn.onclick = () => playSound(sound.url, sound.name);
           btn.innerHTML = `
-            <span style="font-size: 1.5rem;">${sound.emoji}</span>
+            <span style="font-size: 1.5rem;">${sound.emoji || '🔊'}</span>
             <span>${sound.name}</span>
           `;
-          grid.appendChild(btn);
+          wrapper.appendChild(btn);
+
+          // Si es un sonido personalizado, añadir botón de borrar (X)
+          if (sound.isCustom) {
+            const delBtn = document.createElement('button');
+            delBtn.innerText = '×';
+            delBtn.style.cssText = `
+              position: absolute;
+              top: -5px;
+              right: -5px;
+              background: #ff3333;
+              color: white;
+              border: none;
+              border-radius: 50%;
+              width: 18px;
+              height: 18px;
+              font-size: 0.75rem;
+              font-weight: bold;
+              cursor: pointer;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+              z-index: 10;
+            `;
+            delBtn.onclick = (e) => {
+              e.stopPropagation();
+              deleteCustomSound(sound.name);
+            };
+            wrapper.appendChild(delBtn);
+          }
+
+          grid.appendChild(wrapper);
         });
       } catch (e) {
         console.error('Error al cargar Soundboard:', e);
@@ -1748,6 +1800,69 @@
           showToast(`Sonando efecto: ${name}`);
         } else {
           showToast('Error al reproducir sonido');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function toggleAddSoundForm() {
+      const form = document.getElementById('addSoundForm');
+      if (form.style.display === 'none') {
+        form.style.display = 'flex';
+      } else {
+        form.style.display = 'none';
+      }
+    }
+
+    async function addCustomSound() {
+      const name = document.getElementById('soundNameInput').value.trim();
+      const emoji = document.getElementById('soundEmojiInput').value.trim();
+      const url = document.getElementById('soundUrlInput').value.trim();
+
+      if (!name || !url) {
+        showToast('Escribe el nombre y la URL del MP3.');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/soundboard/add', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, emoji, url })
+        });
+
+        if (res.ok) {
+          showToast('Sonido personalizado guardado.');
+          document.getElementById('soundNameInput').value = '';
+          document.getElementById('soundEmojiInput').value = '';
+          document.getElementById('soundUrlInput').value = '';
+          document.getElementById('addSoundForm').style.display = 'none';
+          
+          if (currentChannelId) {
+            loadSoundboard(currentChannelId);
+          }
+        } else {
+          showToast('Error al añadir sonido.');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function deleteCustomSound(name) {
+      if (!confirm(`¿Eliminar el sonido "${name}"?`)) return;
+      try {
+        const res = await fetch('/api/soundboard/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name })
+        });
+        if (res.ok) {
+          showToast('Sonido eliminado.');
+          if (currentChannelId) {
+            loadSoundboard(currentChannelId);
+          }
         }
       } catch (e) {
         console.error(e);
