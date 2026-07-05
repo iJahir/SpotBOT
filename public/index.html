@@ -706,6 +706,29 @@
       color: white;
     }
 
+    /* Estilo del input y botón de mandar grande */
+    .chat-input-wrapper {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .chat-input-wrapper .chat-input {
+      flex: 1;
+      height: 48px;
+      padding: 0 16px;
+      font-size: 0.9rem;
+    }
+
+    .chat-input-wrapper .btn-send {
+      padding: 0 28px;
+      font-size: 0.95rem;
+      height: 48px;
+      font-weight: bold;
+      min-width: 100px;
+      box-shadow: 0 4px 10px rgba(29, 185, 84, 0.25);
+    }
+
     /* CONSOLA */
     .terminal-container {
       width: 100%;
@@ -892,15 +915,21 @@
         <div class="control-row">
           <span class="control-label">Actividad y Estado del Bot en Discord</span>
           <div class="search-container" style="display: flex; flex-direction: column; gap: 8px;">
-            <div style="display: flex; gap: 8px;">
-              <input type="text" class="chat-input" id="presenceActivity" placeholder="Actividad (ej: GTA San Andreas)">
-              <select class="channel-select" id="presenceStatus" style="width: 130px;">
-                <option value="online">🟢 Online</option>
-                <option value="idle">🌙 Ausente</option>
-                <option value="dnd">🔴 No Molestar</option>
-              </select>
+            <div style="display: flex; flex-direction: column; gap: 8px; width: 100%;">
+              <div style="display: flex; gap: 8px; width: 100%;">
+                <select class="channel-select" id="presenceType" style="flex: 1;">
+                  <option value="playing">🕹️ Jugando a...</option>
+                  <option value="custom">💬 Estado Personalizado</option>
+                </select>
+                <select class="channel-select" id="presenceStatus" style="width: 130px;">
+                  <option value="online">🟢 Online</option>
+                  <option value="idle">🌙 Ausente</option>
+                  <option value="dnd">🔴 No Molestar</option>
+                </select>
+              </div>
+              <input type="text" class="chat-input" id="presenceActivity" placeholder="Nombre del juego o estado...">
             </div>
-            <button class="btn-send" style="width: 100%; font-size: 0.8rem; padding: 10px 0;" onclick="updatePresence()">Guardar Actividad</button>
+            <button class="btn-send" style="width: 100%; font-size: 0.8rem; padding: 12px 0; height: auto;" onclick="updatePresence()">Guardar Actividad</button>
           </div>
         </div>
 
@@ -1069,6 +1098,7 @@
           presenceInput.value = data.botActivity || '';
         }
         document.getElementById('presenceStatus').value = data.botStatus || 'online';
+        document.getElementById('presenceType').value = data.botPresenceType || 'playing';
 
         if (activeTab !== 'reproductor') return;
 
@@ -1134,11 +1164,12 @@
     async function updatePresence() {
       const activity = document.getElementById('presenceActivity').value.trim();
       const status = document.getElementById('presenceStatus').value;
+      const presenceType = document.getElementById('presenceType').value;
       try {
         const res = await fetch('/api/presence', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ activity, status })
+          body: JSON.stringify({ activity, status, presenceType })
         });
         if (res.ok) {
           showToast('Presencia actualizada con éxito');
@@ -1359,6 +1390,8 @@
           onChannelChanged(currentChannelId);
         } else if (currentChannelId) {
           select.value = currentChannelId;
+          // Solución al Bug de menciones: Forzar ejecución al recargar canales
+          onChannelChanged(currentChannelId);
         }
       } catch (e) {
         console.error('Error al cargar canales:', e);

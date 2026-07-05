@@ -219,7 +219,8 @@ let currentPlaybackState = {
   voiceConnected: false,
   guildName: null,
   botStatus: 'online',
-  botActivity: ''
+  botActivity: '',
+  botPresenceType: 'playing'
 };
 
 // -------------------------------------------------------------
@@ -301,11 +302,19 @@ app.get('/api/state', (req, res) => {
   currentPlaybackState.voiceConnected = voiceConnection !== null;
   currentPlaybackState.guildName = lastTextChannel ? lastTextChannel.guild.name : (voiceConnection ? client.guilds.cache.get(voiceConnection.joinConfig.guildId)?.name : null);
   
-  // Guardar presencia en el estado actualizable
+  // Guardar presencia en el estado actualizable con mapeo para Tipo 4 (Custom Status) vs Tipo 0 (Playing)
   if (client.user) {
     const presence = client.user.presence;
     currentPlaybackState.botStatus = presence ? presence.status : 'online';
-    currentPlaybackState.botActivity = presence && presence.activities.length > 0 ? presence.activities[0].name : '';
+    
+    const activeActivity = presence && presence.activities.length > 0 ? presence.activities[0] : null;
+    if (activeActivity) {
+      currentPlaybackState.botPresenceType = activeActivity.type === 4 ? 'custom' : 'playing';
+      currentPlaybackState.botActivity = activeActivity.type === 4 ? (activeActivity.state || '') : activeActivity.name;
+    } else {
+      currentPlaybackState.botPresenceType = 'playing';
+      currentPlaybackState.botActivity = '';
+    }
   }
   
   res.json(currentPlaybackState);
@@ -485,16 +494,21 @@ app.post('/api/skip-to-queue', async (req, res) => {
 
 // Endpoint para guardar presencia del Bot (Juego y Estado)
 app.post('/api/presence', (req, res) => {
-  const { activity, status } = req.body;
+  const { activity, status, presenceType } = req.body;
   if (!client.user) {
     return res.status(503).json({ error: 'El bot no está listo.' });
   }
   try {
+    const isCustom = presenceType === 'custom';
     client.user.setPresence({
-      activities: [{ name: activity, type: 0 }], // type 0 = Playing
+      activities: [{
+        name: isCustom ? 'custom' : activity,
+        state: isCustom ? activity : undefined,
+        type: isCustom ? 4 : 0 // 4 = Custom, 0 = Playing
+      }],
       status: status // 'online', 'idle', 'dnd'
     });
-    console.log(`[PRESENCIA WEB] Cambiada a juego "${activity}" y estado "${status}"`);
+    console.log(`[PRESENCIA WEB] Cambiada a tipo "${presenceType}", actividad "${activity}" y estado "${status}"`);
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
