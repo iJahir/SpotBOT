@@ -154,18 +154,37 @@ function formatTime(ms) {
 }
 
 // -------------------------------------------------------------
-// OBTENER IP LOCAL DE LA RED PARA EL QR MÓVIL
+// OBTENER IP LOCAL DE LA RED EVITANDO ADAPTADORES VIRTUALES
 // -------------------------------------------------------------
 function getLocalIpAddress() {
   const interfaces = os.networkInterfaces();
+  let fallbackIp = '127.0.0.1';
+
   for (const name of Object.keys(interfaces)) {
+    const lowerName = name.toLowerCase();
+    // Omitir adaptadores virtuales comunes de VPNs, VirtualBox, VMware o WSL
+    if (
+      lowerName.includes('virtual') || 
+      lowerName.includes('vbox') || 
+      lowerName.includes('vmware') || 
+      lowerName.includes('host-only') || 
+      lowerName.includes('wsl') || 
+      lowerName.includes('vpn')
+    ) {
+      continue;
+    }
+
     for (const iface of interfaces[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        // Dar prioridad a subredes Wi-Fi residenciales estándar
+        if (iface.address.startsWith('192.168.') && !iface.address.startsWith('192.168.56.')) {
+          return iface.address;
+        }
+        fallbackIp = iface.address;
       }
     }
   }
-  return '127.0.0.1'; // Fallback
+  return fallbackIp;
 }
 
 const localIp = getLocalIpAddress();
@@ -1196,14 +1215,17 @@ downloadYtDlp().then(() => {
   app.listen(PORT, () => {
     console.log(`\n============================================================`);
     console.log(`Servidor web activo para autenticación de Spotify y URLs de Discord.`);
-    console.log(`- Enlace de login (Spotify): ${loginUrl}`);
-    console.log(`- Términos de Servicio y Donaciones: http://${localIp}:${PORT}/terms`);
-    console.log(`- Política de Privacidad: http://${localIp}:${PORT}/privacy`);
-    console.log(`- Verificación de Roles: http://${localIp}:${PORT}/linked-roles`);
-    console.log(`- Endpoint de Interacciones: http://${localIp}:${PORT}/interactions`);
+    console.log(`- Enlace para PC (Ctrl+Clic): http://localhost:${PORT}/`);
+    console.log(`- Enlace para Celular (WiFi): http://${localIp}:${PORT}/`);
+    console.log(`- Enlace de login Spotify (PC): http://localhost:${PORT}/login`);
+    console.log(`- Enlace de login Spotify (Celular): http://${localIp}:${PORT}/login`);
+    console.log(`- Términos de Servicio y Donaciones: http://localhost:${PORT}/terms`);
+    console.log(`- Política de Privacidad: http://localhost:${PORT}/privacy`);
+    console.log(`- Verificación de Roles: http://localhost:${PORT}/linked-roles`);
+    console.log(`- Endpoint de Interacciones: http://localhost:${PORT}/interactions`);
     console.log(`============================================================\n`);
     
-    qrcode.generate(loginUrl, { small: true });
+    qrcode.generate(`http://${localIp}:${PORT}/login`, { small: true });
   });
 }).catch(err => {
   console.error('Fallo crítico: No se pudo descargar yt-dlp.exe:', err);
