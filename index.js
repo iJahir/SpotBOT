@@ -93,6 +93,15 @@ console.error = (...args) => {
   writeToLogFile('ERROR', msg);
 };
 
+// Helper formateador de tiempo en ms
+function formatTime(ms) {
+  if (isNaN(ms) || ms < 0) return '0:00';
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+}
+
 // -------------------------------------------------------------
 // OBTENER IP LOCAL DE LA RED PARA EL QR MÓVIL
 // -------------------------------------------------------------
@@ -799,7 +808,9 @@ app.post('/api/soundboard/play', async (req, res) => {
     // Al terminar, volver a activar la sincronización
     const onIdle = () => {
       isSoundboardPlaying = false;
-      audioPlayer.off(AudioPlayerStatus.Idle, onIdle);
+      if (audioPlayer) {
+        audioPlayer.off(AudioPlayerStatus.Idle, onIdle);
+      }
       console.log('[SOUNDBOARD] Sonido terminado. Sincronización reanudada.');
     };
     audioPlayer.on(AudioPlayerStatus.Idle, onIdle);
@@ -1067,6 +1078,49 @@ client.on('messageCreate', async (message) => {
 
   const content = message.content.trim();
 
+  // -----------------------------------------------------------
+  // COMANDOS DE AUTO-RESPUESTA Y AYUDA INTERACTIVOS
+  // -----------------------------------------------------------
+  if (content === '!creador') {
+    await replyDeveloperOrPrivate(message, 'Este increíble bot fue desarrollado y creado por **iJahir_x503** 👑.');
+    return;
+  }
+
+  if (content === '!help') {
+    const helpText = `📖 **Comandos Disponibles de SpotBOT**:\n` +
+      `• \`!joinS\`: Conecta al bot a tu canal de voz actual.\n` +
+      `• \`!leaveS\`: Desconecta al bot del canal de voz.\n` +
+      `• \`!creador\`: Muestra quién es el creador del bot.\n` +
+      `• \`!nowplaying\`: Muestra detalles de la canción reproduciéndose ahora en Discord.\n` +
+      `• \`!queue\`: Lista las siguientes 5 canciones en la cola de Spotify.`;
+    await replyDeveloperOrPrivate(message, helpText);
+    return;
+  }
+
+  if (content === '!nowplaying') {
+    if (currentPlaybackState.title && currentPlaybackState.title !== 'Ninguna canción') {
+      const npText = `🎵 **Sonando Ahora**: "${currentPlaybackState.title}" de **${currentPlaybackState.artist}**\n` +
+        `⏱️ **Progreso**: ${formatTime(currentPlaybackState.progressMs)} / ${formatTime(currentPlaybackState.durationMs)}`;
+      await replyDeveloperOrPrivate(message, npText);
+    } else {
+      await replyDeveloperOrPrivate(message, '❌ No hay ninguna canción reproduciéndose en este momento.');
+    }
+    return;
+  }
+
+  if (content === '!queue') {
+    if (currentPlaybackState.queue && currentPlaybackState.queue.length > 0) {
+      let qText = `📋 **Cola de Spotify (Siguientes canciones)**:\n`;
+      currentPlaybackState.queue.forEach((track, index) => {
+        qText += `${index + 1}. "${track.title}" de **${track.artist}**\n`;
+      });
+      await replyDeveloperOrPrivate(message, qText);
+    } else {
+      await replyDeveloperOrPrivate(message, '📋 La cola de reproducción está vacía.');
+    }
+    return;
+  }
+
   if (content === '!joinS') {
     const member = message.member;
     if (!message.member.voice.channel) {
@@ -1188,6 +1242,7 @@ async function syncSpotifyPlayback(guildId) {
   if (isSyncing || isSoundboardPlaying) return;
 
   const token = await getValidAccessToken();
+  // Verificación de seguridad inicial
   if (!token || !audioPlayer) {
     checkInactivity(guildId, false);
     return;
@@ -1200,8 +1255,11 @@ async function syncSpotifyPlayback(guildId) {
       }
     });
 
+    // Verificación de seguridad tras consulta asíncrona
+    if (!audioPlayer) return;
+
     if (response.status === 204) {
-      if (audioPlayer.state.status !== AudioPlayerStatus.Paused && audioPlayer.state.status !== AudioPlayerStatus.Idle) {
+      if (audioPlayer.state.status !== AudioPlayerStatus.Idle) {
         console.log('Spotify inactivo. Pausando reproducción en Discord.');
         audioPlayer.pause();
       }
@@ -1246,6 +1304,9 @@ async function syncSpotifyPlayback(guildId) {
       logSystemError('ERR-02', 'Error al consultar lista de cola a la API de Spotify.', e);
     }
 
+    // Verificación de seguridad tras consultas asíncronas
+    if (!audioPlayer) return;
+
     // Actualizar estado del panel web
     currentPlaybackState = {
       title: trackName,
@@ -1273,10 +1334,10 @@ async function syncSpotifyPlayback(guildId) {
     const isDiscordPlaying = audioPlayer.state.status === AudioPlayerStatus.Playing;
     if (isPlayingOnSpotify && !isDiscordPlaying) {
       console.log('Spotify reanudado. Reanudando Discord.');
-      audioPlayer.unpause();
+      if (audioPlayer) audioPlayer.unpause();
     } else if (!isPlayingOnSpotify && isDiscordPlaying) {
       console.log('Spotify pausado. Pausando Discord.');
-      audioPlayer.pause();
+      if (audioPlayer) audioPlayer.pause();
     }
 
     if (isPlayingOnSpotify) {
@@ -1390,10 +1451,12 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     
     currentAudioResource.volume.setVolume(currentVolume);
     
-    audioPlayer.play(currentAudioResource);
-    
-    if (!isPlayingOnSpotify) {
-      audioPlayer.pause();
+    // Doble validación síncrona
+    if (audioPlayer) {
+      audioPlayer.play(currentAudioResource);
+      if (!isPlayingOnSpotify) {
+        audioPlayer.pause();
+      }
     }
 
     lastSyncProgressMs = progressMs;
