@@ -406,7 +406,7 @@
       -webkit-appearance: none;
       height: 4px;
       border-radius: 2px;
-      background: rgba(255,255,255,0.1);
+      background: rgba(255, 255, 255, 0.1);
       outline: none;
       cursor: pointer;
     }
@@ -1039,21 +1039,21 @@
         const pct = durationMs > 0 ? (progressMs / durationMs) * 100 : 0;
         document.getElementById('progressBarFill').style.width = `${pct}%`;
 
-        // Renderizar Cola
+        // Renderizar Cola con acción de salto limpio
         const queueContainer = document.getElementById('queueList');
         if (data.queue && data.queue.length > 0) {
           queueContainer.innerHTML = '';
-          data.queue.forEach(item => {
+          data.queue.forEach((item, index) => {
             const row = document.createElement('div');
             row.className = 'queue-item';
-            row.onclick = () => playTrackDirectly(item.uri, item.title);
+            row.onclick = () => skipToQueue(index, item.title);
             row.innerHTML = `
               <img src="${item.coverUrl || 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=100'}" alt="Cover">
               <div class="search-item-info">
                 <div class="search-item-title">${item.title}</div>
                 <div class="search-item-artist">${item.artist}</div>
               </div>
-              <div style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">Reproducir ahora</div>
+              <div style="font-size: 0.7rem; color: var(--primary); font-weight: bold;">Saltar aquí</div>
             `;
             queueContainer.appendChild(row);
           });
@@ -1102,6 +1102,24 @@
           setTimeout(updateState, 1000);
         } else {
           showToast('Error al reproducir');
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    async function skipToQueue(index, title) {
+      try {
+        const res = await fetch('/api/skip-to-queue', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ index })
+        });
+        if (res.ok) {
+          showToast(`Saltando a: "${title}"`);
+          setTimeout(updateState, 1500);
+        } else {
+          showToast('Error al saltar en la cola');
         }
       } catch (e) {
         console.error(e);
@@ -1284,7 +1302,7 @@
         
         listContainer.innerHTML = '';
         if (members.length === 0) {
-          listContainer.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">No hay miembros o no se pudieron cargar</div>';
+          listContainer.innerHTML = '<div style="font-size: 0.7rem; color: var(--text-muted); padding: 5px;">No hay miembros activos en la caché de este canal</div>';
           return;
         }
 
@@ -1294,8 +1312,7 @@
           badge.innerText = `@${member.displayName}`;
           badge.onclick = () => {
             const chatInput = document.getElementById('realChatInput');
-            // Insertar la mención de texto en el input
-            chatInput.value += ` @${member.username} `;
+            chatInput.value += `@${member.username} `;
             chatInput.focus();
           };
           listContainer.appendChild(badge);

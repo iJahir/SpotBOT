@@ -444,6 +444,30 @@ app.post('/api/play-track', async (req, res) => {
   }
 });
 
+// Saltar hasta la canción en un index específico de la cola de Spotify
+app.post('/api/skip-to-queue', async (req, res) => {
+  const { index } = req.body;
+  const token = await getValidAccessToken();
+  if (!token) return res.status(401).json({ error: 'No autenticado.' });
+  
+  try {
+    // Saltamos 'index + 1' veces para reproducir y remover las canciones en cola naturales de Spotify
+    for (let i = 0; i <= index; i++) {
+      await fetch('https://api.spotify.com/v1/me/player/next', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (i < index) {
+        await new Promise(r => setTimeout(r, 400));
+      }
+    }
+    return res.json({ success: true });
+  } catch (e) {
+    logSystemError('ERR-02', 'Error al saltar al index de la cola en Spotify.', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Enviar mensajes al canal con búsqueda activa de miembros por nombre en la API de Discord
 app.post('/api/message', async (req, res) => {
   const { message, channelId } = req.body;
@@ -597,7 +621,7 @@ app.get('/api/channels/:id/messages', async (req, res) => {
   }
 });
 
-// Obtener los miembros del servidor de un canal específico
+// Obtener los miembros del servidor de un canal específico con sistema de fallbacks robusto
 app.get('/api/channels/:id/members', async (req, res) => {
   const { id } = req.params;
   try {
@@ -605,13 +629,43 @@ app.get('/api/channels/:id/members', async (req, res) => {
     if (!channel || !channel.guild) {
       return res.json([]);
     }
-    // Fetch para asegurar que estén cargados
-    const members = await channel.guild.members.fetch({ limit: 100 });
-    const formatted = members.map(m => ({
-      username: m.user.username,
-      displayName: m.displayName
-    }));
-    res.json(formatted);
+    
+    let membersList = [];
+    try {
+      // Intentar fetch directo de miembros del servidor
+      const members = await channel.guild.members.fetch({ limit: 80 });
+      membersList = members.map(m => ({
+        username: m.user.username,
+        displayName: m.displayName
+      }));
+    } catch (fetchErr) {
+      // Fallback 1: Usar la caché rápida local
+      membersList = channel.guild.members.cache.map(m => ({
+        username: m.user.username,
+        displayName: m.displayName
+      }));
+    }
+    
+    // Fallback 2: Si la lista sigue vacía, cargamos los autores únicos de los últimos 50 mensajes del canal
+    if (membersList.length === 0) {
+      try {
+        const messages = await channel.messages.fetch({ limit: 50 });
+        const uniqueAuthors = new Map();
+        messages.forEach(msg => {
+          if (!msg.author.bot) {
+            uniqueAuthors.set(msg.author.id, {
+              username: msg.author.username,
+              displayName: msg.member ? msg.member.displayName : msg.author.username
+            });
+          }
+        });
+        membersList = Array.from(uniqueAuthors.values());
+      } catch (msgErr) {
+        console.error('Error al recuperar miembros vía mensajes:', msgErr);
+      }
+    }
+
+    res.json(membersList);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -744,15 +798,33 @@ let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
 let isSyncing = false;
 
-// Enviar un mensaje temporal que se borre a los 10 segundos
-async function replyTemporarily(message, text) {
-  try {
-    const msg = await message.reply(text);
-    setTimeout(() => {
-      msg.delete().catch(() => {});
-    }, 10000);
-  } catch (e) {
-    console.error('Error al enviar mensaje temporal:', e);
+// Enviar un mensaje de respuesta privado (DM) o público en canal según rol Developer
+async function replyDeveloperOrPrivate(message, text) {
+  const member = message.member;
+  
+  // Buscar si el usuario tiene el rol 'Developer'
+  const hasDevRole = member && member.roles.cache.some(role => role.name.toLowerCase() === 'developer');
+
+  if (hasDevRole) {
+    // Si tiene el rol Developer, se responde en el canal de texto normal
+    try {
+      const msg = await message.reply(text);
+      // Auto-eliminar a los 20s para mantener el chat limpio
+      setTimeout(() => msg.delete().catch(() => {}), 20000);
+    } catch (e) {
+      console.error('Error al responder en canal publico:', e);
+    }
+  } else {
+    // Si no tiene el rol, se envía como mensaje privado (DM) y se borra el comando disparador
+    try {
+      await message.author.send(text);
+      await message.delete().catch(() => {});
+    } catch (e) {
+      // Si el usuario tiene los DMs cerrados, responder temporalmente y borrar
+      const tempMsg = await message.reply('⚠️ Te he enviado la información por mensaje privado (DM). Habilita tus DMs si no te llegó.');
+      setTimeout(() => tempMsg.delete().catch(() => {}), 10000);
+      await message.delete().catch(() => {});
+    }
   }
 }
 
@@ -789,7 +861,8 @@ client.on('messageCreate', async (message) => {
   if (content === '!joinS') {
     const member = message.member;
     if (!message.member.voice.channel) {
-      return message.reply('Debes estar en un canal de voz para usar este comando.');
+      // Responder privado/público según Developer
+      return replyDeveloperOrPrivate(message, 'Debes estar en un canal de voz para usar este comando.');
     }
 
     try {
@@ -810,11 +883,9 @@ client.on('messageCreate', async (message) => {
       audioPlayer = createAudioPlayer();
       voiceConnection.subscribe(audioPlayer);
 
-      // Monitorear cambios de estado del reproductor de audio (Auto-Sanación ante desconexiones de YouTube)
       audioPlayer.on('stateChange', async (oldState, newState) => {
         console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
         
-        // Auto-Sanación: Si pasa a IDLE de forma imprevista pero Spotify sigue reproduciendo, se cayó la red
         if (newState.status === AudioPlayerStatus.Idle) {
           const token = await getValidAccessToken();
           if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing) {
@@ -837,22 +908,24 @@ client.on('messageCreate', async (message) => {
         logSystemError('ERR-04', 'Error controlado en el reproductor de audio de voz.', error);
       });
 
+      let joinMsg = '';
       if (spotifyAccessToken) {
-        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.\nPuedes abrir el panel de control en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración.`);
+        joinMsg = `¡Me he unido al canal de voz **${member.voice.channel.name}**! Sincronización en tiempo real activa.\nPuedes abrir el panel de control en tu navegador local (http://localhost:5000) o escaneando el código QR de la consola de administración.`;
       } else {
-        replyTemporarily(message, `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo el enlace de login generado en tu consola (http://localhost:5000/login) o escaneando el código QR.`);
+        joinMsg = `¡Me he unido al canal de voz **${member.voice.channel.name}**!\n⚠️ **Sincronización pausada**: Aún no has conectado tu cuenta de Spotify.\nPor favor, vincula tu cuenta abriendo el enlace de login generado en tu consola (http://localhost:5000/login) o escaneando el código QR.`;
       }
 
+      await replyDeveloperOrPrivate(message, joinMsg);
       startSyncLoop(message.guild.id);
     } catch (error) {
       logSystemError('ERR-04', 'Excepción crítica al unirse al canal de voz de Discord.', error);
-      message.reply('No pude unirme al canal de voz.');
+      await replyDeveloperOrPrivate(message, 'No pude unirme al canal de voz.');
     }
   }
 
   if (content === '!leaveS') {
     cleanupAndLeave();
-    replyTemporarily(message, 'He salido del canal de voz y la sincronización se ha detenido.');
+    await replyDeveloperOrPrivate(message, 'He salido del canal de voz y la sincronización se ha detenido.');
   }
 });
 
@@ -887,7 +960,7 @@ function stopActiveFfmpeg() {
 }
 
 // -------------------------------------------------------------
-// BUCLE DE SINCRONIZACIÓN EN TIEMPO REAL CON SPOTIFY
+// BUCLE DE SINC
 // -------------------------------------------------------------
 function startSyncLoop(guildId) {
   stopSyncLoop();
