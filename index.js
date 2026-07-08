@@ -9,7 +9,7 @@ import crypto from 'crypto';
 import { exec, spawn } from 'child_process';
 import util from 'util';
 import ffmpegPath from 'ffmpeg-static';
-import { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, PermissionFlagsBits, EmbedBuilder, Partials } from 'discord.js';
 import {
   joinVoiceChannel,
   createAudioPlayer,
@@ -17,10 +17,12 @@ import {
   AudioPlayerStatus,
   VoiceConnectionStatus,
   getVoiceConnection,
-  StreamType
+  StreamType,
+  EndBehaviorType
 } from '@discordjs/voice';
 import play from 'play-dl';
 import qrcode from 'qrcode-terminal';
+import { Readable } from 'stream';
 
 const execPromise = util.promisify(exec);
 
@@ -36,6 +38,8 @@ const favoritesFilePath = path.join(__dirname, 'favorites.json');
 const historyFilePath = path.join(__dirname, 'history.json');
 const statsFilePath = path.join(__dirname, 'stats.json');
 const soundboardFilePath = path.join(__dirname, 'soundboard.json');
+const dmHistoryFilePath = path.join(__dirname, 'dm_history.json');
+const presenceFilePath = path.join(__dirname, 'presence.json');
 
 // Comprobar variables de entorno
 const {
@@ -84,6 +88,8 @@ if (!fs.existsSync(favoritesFilePath)) writeJSON(favoritesFilePath, []);
 if (!fs.existsSync(historyFilePath)) writeJSON(historyFilePath, []);
 if (!fs.existsSync(statsFilePath)) writeJSON(statsFilePath, { totalPlaySeconds: 0, totalTracksPlayed: 0 });
 if (!fs.existsSync(soundboardFilePath)) writeJSON(soundboardFilePath, []);
+if (!fs.existsSync(dmHistoryFilePath)) writeJSON(dmHistoryFilePath, {});
+if (!fs.existsSync(presenceFilePath)) writeJSON(presenceFilePath, { status: 'online', activity: '', presenceType: 'playing' });
 
 // Lógica autolimpiadora: Filtrar y quitar emisoras de radio que se hayan guardado previamente en favoritos o historial
 function cleanRadioFromJSON() {
@@ -290,6 +296,7 @@ let currentVolume = 0.5; // Rango de 0 a 1.0 (50% por defecto)
 let currentSpeed = 1.0;  // Velocidad de reproducción (1.0 por defecto)
 let currentAudioResource = null;
 let isSoundboardPlaying = false;
+let dmLogs = readJSON(dmHistoryFilePath, {}); // Historial de mensajes DM cargado desde persistencia
 
 // Estados Premium Adicionales
 let loopMode = 'none'; // 'none', 'track', 'queue'
@@ -320,7 +327,9 @@ let currentPlaybackState = {
   isRadioMode: false,
   activeRadioStation: null,
   isFavorite: false,
-  uri: ''
+  uri: '',
+  trackNotFound: false,
+  notFoundTrackName: ''
 };
 
 // -------------------------------------------------------------
@@ -390,6 +399,17 @@ app.get('/callback', async (req, res) => {
 
 // Endpoints del Dashboard
 app.get('/api/state', (req, res) => {
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  activeClients.set(clientIp, Date.now());
+
+  // Limpiar clientes inactivos (sin sondeo en los últimos 8 segundos)
+  const now = Date.now();
+  for (const [ip, lastActive] of activeClients.entries()) {
+    if (now - lastActive > 8000) {
+      activeClients.delete(ip);
+    }
+  }
+
   if (currentPlaybackState.isPlaying && currentPlaybackState.progressMs < currentPlaybackState.durationMs) {
     const elapsed = Date.now() - lastSyncTimestamp;
     currentPlaybackState.progressMs = Math.min(
@@ -408,7 +428,14 @@ app.get('/api/state', (req, res) => {
     
     const activeActivity = presence && presence.activities.length > 0 ? presence.activities[0] : null;
     if (activeActivity) {
-      currentPlaybackState.botPresenceType = activeActivity.type === 4 ? 'custom' : 'playing';
+      const typeReverseMap = {
+        0: 'playing',
+        2: 'listening',
+        3: 'watching',
+        5: 'competing',
+        4: 'custom'
+      };
+      currentPlaybackState.botPresenceType = typeReverseMap[activeActivity.type] || 'playing';
       currentPlaybackState.botActivity = activeActivity.type === 4 ? (activeActivity.state || '') : activeActivity.name;
     } else {
       currentPlaybackState.botPresenceType = 'playing';
@@ -421,6 +448,16 @@ app.get('/api/state', (req, res) => {
   currentPlaybackState.isAutoDJ = isAutoDJ;
   currentPlaybackState.isRadioMode = isRadioMode;
   currentPlaybackState.activeRadioStation = activeRadioStation;
+
+  currentPlaybackState.activeSession = activeSession ? {
+    gameActivity: activeSession.gameActivity,
+    durationHours: activeSession.durationHours,
+    startTime: activeSession.startTime,
+    endTime: activeSession.endTime
+  } : null;
+
+  currentPlaybackState.activePanelClients = activeClients.size;
+  currentPlaybackState.activePanelIps = Array.from(activeClients.keys());
 
   res.json(currentPlaybackState);
 });
@@ -576,6 +613,26 @@ app.post('/api/play-track', async (req, res) => {
       body: JSON.stringify({ uris: [uri] })
     });
     if (response.ok || response.status === 204) {
+      // Obtener recomendaciones y encolarlas para que continúe la reproducción
+      if (uri.startsWith('spotify:track:')) {
+        const trackId = uri.split(':').pop();
+        try {
+          const recResponse = await fetch(`https://api.spotify.com/v1/recommendations?seed_tracks=${trackId}&limit=5`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (recResponse.ok) {
+            const recData = await recResponse.json();
+            for (const recTrack of recData.tracks) {
+              await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(recTrack.uri)}`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${token}` }
+              });
+            }
+          }
+        } catch (recErr) {
+          console.error('Error al encolar recomendaciones para play-track:', recErr);
+        }
+      }
       return res.json({ success: true });
     }
     res.status(response.status).json({ error: 'Error al reproducir track' });
@@ -830,7 +887,7 @@ app.post('/api/message', async (req, res) => {
       }
 
       await channel.send({
-        content: `**Panel**: ${parsedMessage}`,
+        content: parsedMessage,
         allowedMentions: { parse: ['users', 'roles', 'everyone'] }
       });
       lastTextChannel = channel;
@@ -956,6 +1013,7 @@ app.get('/api/channels/:id/members', async (req, res) => {
         const permissions = channel.permissionsFor(m);
         if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
           membersMap.set(m.user.id, {
+            id: m.user.id,
             username: m.user.username,
             displayName: m.displayName,
             avatar: m.user.displayAvatarURL({ size: 64 })
@@ -974,6 +1032,7 @@ app.get('/api/channels/:id/members', async (req, res) => {
             const permissions = channel.permissionsFor(member);
             if (permissions && permissions.has(PermissionFlagsBits.ViewChannel)) {
               membersMap.set(msg.author.id, {
+                id: msg.author.id,
                 username: msg.author.username,
                 displayName: member.displayName,
                 avatar: msg.author.displayAvatarURL({ size: 64 })
@@ -986,6 +1045,237 @@ app.get('/api/channels/:id/members', async (req, res) => {
 
     const membersList = Array.from(membersMap.values());
     res.json(membersList);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Obtener canales de voz disponibles en los servidores del bot
+app.get('/api/voice-channels', async (req, res) => {
+  try {
+    const channelsList = [];
+    for (const [guildId, guild] of client.guilds.cache) {
+      guild.channels.cache.forEach(channel => {
+        if (channel.type === 2 || channel.type === 13) { // 2 = GuildVoice, 13 = GuildStageVoice
+          channelsList.push({
+            id: channel.id,
+            name: channel.name,
+            guildName: guild.name
+          });
+        }
+      });
+    }
+    res.json(channelsList);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Conectar o mover al bot a un canal de voz
+app.post('/api/voice/connect', async (req, res) => {
+  const { channelId } = req.body;
+  if (!channelId) return res.status(400).json({ error: 'Falta ID del canal.' });
+  try {
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || (channel.type !== 2 && channel.type !== 13)) {
+      return res.status(404).json({ error: 'Canal de voz no encontrado.' });
+    }
+
+    lastVoiceChannelId = channel.id;
+    lastGuildId = channel.guild.id;
+
+    voiceConnection = joinVoiceChannel({
+      channelId: channel.id,
+      guildId: channel.guild.id,
+      adapterCreator: channel.guild.voiceAdapterCreator,
+      selfDeaf: false,
+      selfMute: false
+    });
+
+    voiceConnection.on('stateChange', (oldState, newState) => {
+      console.log(`[CONEXIÓN DISCORD API] Estado: ${oldState.status} -> ${newState.status}`);
+    });
+
+    setupAudioPlayer(voiceConnection);
+
+    return res.json({ success: true, channelName: channel.name });
+  } catch (e) {
+    logSystemError('ERR-04', 'Error al conectarse a canal de voz por API.', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Desconectar al bot del canal de voz
+app.post('/api/voice/disconnect', (req, res) => {
+  cleanupAndLeave();
+  res.json({ success: true });
+});
+
+// Enviar un mensaje directo (DM) a un usuario
+app.post('/api/message/dm', async (req, res) => {
+  const { userId, message } = req.body;
+  if (!userId || !message) return res.status(400).json({ error: 'Faltan parámetros.' });
+  try {
+    const user = await client.users.fetch(userId);
+    if (user) {
+      const sentMsg = await user.send(message);
+      
+      // Guardar en el log local de DMs
+      if (!dmLogs[userId]) dmLogs[userId] = [];
+      dmLogs[userId].push({
+        id: sentMsg.id,
+        author: client.user.username,
+        avatar: client.user.displayAvatarURL({ size: 64 }) || 'https://cdn.discordapp.com/embed/avatars/0.png',
+        content: message,
+        timestamp: sentMsg.createdAt,
+        isMe: true
+      });
+      if (dmLogs[userId].length > 50) dmLogs[userId].shift();
+      writeJSON(dmHistoryFilePath, dmLogs); // Guardar historial persistente
+
+      return res.json({ success: true });
+    }
+    res.status(404).json({ error: 'Usuario no encontrado.' });
+  } catch (e) {
+    logSystemError('ERR-05', 'Fallo al enviar mensaje privado (DM).', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Obtener mensajes de chat DM con un usuario específico
+app.get('/api/dm/:userId/messages', (req, res) => {
+  const { userId } = req.params;
+  res.json(dmLogs[userId] || []);
+});
+
+// Endpoint para actualizar la presencia del bot
+app.post('/api/presence', (req, res) => {
+  const { activity, status, presenceType } = req.body;
+  if (!client.user) {
+    return res.status(400).json({ error: 'El bot no está listo.' });
+  }
+
+  try {
+    const typeMap = {
+      playing: 0,
+      listening: 2,
+      watching: 3,
+      competing: 5,
+      custom: 4
+    };
+
+    const type = typeMap[presenceType] !== undefined ? typeMap[presenceType] : 0;
+    
+    // Leer el estado anterior de presencia
+    const pres = readJSON(presenceFilePath, { status: 'online', activity: '', presenceType: 'playing', startTimestamp: null });
+    
+    // Si la actividad cambia, reseteamos el tiempo de inicio, de lo contrario lo conservamos
+    let startTimestamp = pres.startTimestamp;
+    if (activity !== pres.activity || !startTimestamp) {
+      startTimestamp = activity ? Date.now() : null;
+    }
+
+    const activityObj = { name: activity, type: type };
+    if (activity && type !== 4) {
+      // Para playing, listening, watching, competing agregamos el timestamp de inicio
+      activityObj.timestamps = { start: startTimestamp };
+    } else if (activity && type === 4) {
+      activityObj.state = activity;
+      activityObj.name = 'custom';
+    }
+
+    client.user.setPresence({
+      activities: activity ? [activityObj] : [],
+      status: status || 'online'
+    });
+
+    // Guardar para persistencia incluyendo el startTimestamp
+    writeJSON(presenceFilePath, { activity, status, presenceType, startTimestamp });
+
+    console.log(`[PRESENCIA] Actualizada: Estado = ${status}, Actividad = "${activity}" (${presenceType}), Inicio = ${startTimestamp}`);
+    res.json({ success: true });
+  } catch (e) {
+    console.error('Error al actualizar presencia:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para obtener letras de canciones
+app.get('/api/lyrics', async (req, res) => {
+  const { track, artist } = req.query;
+  if (!track || !artist) {
+    return res.status(400).json({ error: 'Faltan parámetros de búsqueda (track, artist).' });
+  }
+
+  try {
+    // Normalizar nombres (limpiar versiones en vivo, remezclas comunes entre corchetes o paréntesis si es necesario)
+    let cleanTrack = track.replace(/\s*[\(\[].*?[\)\]]/g, '').trim();
+    let cleanArtist = artist.split(',')[0].trim(); // Tomar el primer artista principal
+
+    const url = `https://api.lyrics.ovh/v1/${encodeURIComponent(cleanArtist)}/${encodeURIComponent(cleanTrack)}`;
+    const response = await fetch(url);
+    if (!response.ok) {
+      return res.status(404).json({ error: 'No se encontraron letras para esta canción.' });
+    }
+    const data = await response.json();
+    res.json({ lyrics: data.lyrics || 'No se encontraron letras.' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para obtener los canales de voz activos y sus miembros conectados (vista tipo Discord)
+app.get('/api/voice-channels-active', async (req, res) => {
+  try {
+    const list = [];
+    for (const [guildId, guild] of client.guilds.cache) {
+      const guildInfo = {
+        id: guild.id,
+        name: guild.name,
+        channels: []
+      };
+
+      // Forzar la actualización de caché de miembros y canales para obtener datos precisos en tiempo real
+      await guild.members.fetch().catch(() => {});
+      const channels = await guild.channels.fetch().catch(() => guild.channels.cache);
+
+      channels.forEach(channel => {
+        if (channel.type === 2 || channel.type === 13) { // 2 = GuildVoice, 13 = GuildStageVoice
+          const members = [];
+          channel.members.forEach(member => {
+            members.push({
+              id: member.id,
+              username: member.user.username,
+              displayName: member.displayName,
+              avatar: member.user.displayAvatarURL({ size: 64 }) || 'https://cdn.discordapp.com/embed/avatars/0.png',
+              isBot: member.user.bot,
+              isMuted: member.voice.mute || member.voice.selfMute,
+              isDeaf: member.voice.deaf || member.voice.selfDeaf
+            });
+          });
+
+          // Solo mostramos canales si hay alguien o si es el canal donde está conectado el bot
+          const isBotConnected = voiceConnection && voiceConnection.joinConfig.channelId === channel.id;
+          
+          guildInfo.channels.push({
+            id: channel.id,
+            name: channel.name,
+            members: members,
+            isBotConnected
+          });
+        }
+      });
+
+      // Ordenar canales: primero los que tienen gente conectada o donde está el bot
+      guildInfo.channels.sort((a, b) => {
+        if (a.isBotConnected) return -1;
+        if (b.isBotConnected) return 1;
+        return b.members.length - a.members.length;
+      });
+
+      list.push(guildInfo);
+    }
+    res.json(list);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1040,16 +1330,37 @@ app.post('/api/soundboard/play', async (req, res) => {
     isSoundboardPlaying = true;
     stopActiveFfmpeg(); // Detener canción actual temporalmente
     
-    // Transmitir y decodificar el MP3/OGG de Discord CDN usando FFmpeg para evitar silencios
+    // Descargar el archivo con fetch usando un User-Agent real para evitar 403 Forbidden de Discord CDN
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Fallo al descargar sonido del CDN de Discord: ${response.status} ${response.statusText}`);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    // Transmitir y decodificar el MP3/OGG usando FFmpeg recibiendo el buffer por stdin (pipe:0)
     activeFfmpegProcess = spawn(ffmpegPath, [
-      '-i', url,
+      '-i', 'pipe:0',
       '-f', 's16le',
       '-ar', '48000',
       '-ac', '2',
       'pipe:1'
     ], {
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe']
     });
+
+    activeFfmpegProcess.stdin.on('error', (err) => {
+      // Ignorar error de socket cerrado
+    });
+
+    activeFfmpegProcess.stdin.write(buffer);
+    activeFfmpegProcess.stdin.end();
 
     const resource = createAudioResource(activeFfmpegProcess.stdout, {
       inputType: StreamType.Raw,
@@ -1072,6 +1383,7 @@ app.post('/api/soundboard/play', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     isSoundboardPlaying = false;
+    logSystemError('ERR-04', 'Error al reproducir sonido del Soundboard.', e);
     res.status(500).json({ error: e.message });
   }
 });
@@ -1086,49 +1398,206 @@ app.post('/api/reminder/schedule', async (req, res) => {
   try {
     const channel = await client.channels.fetch(channelId);
     if (!channel) return res.status(404).json({ error: 'Canal no encontrado.' });
+
+    const guild = channel.guild;
+    let resolvedTarget = target;
+    if (guild && target) {
+      const cleanName = target.replace(/[@<>]/g, '').trim().toLowerCase();
+      await guild.members.fetch().catch(() => {});
+      const member = guild.members.cache.find(m => 
+        m.user.username.toLowerCase() === cleanName ||
+        m.displayName.toLowerCase() === cleanName ||
+        m.user.tag.toLowerCase() === cleanName
+      );
+      if (member) {
+        resolvedTarget = `<@${member.id}>`;
+      } else {
+        const role = guild.roles.cache.find(r => r.name.toLowerCase() === cleanName);
+        if (role) {
+          resolvedTarget = `<@&${role.id}>`;
+        }
+      }
+    }
     
     const delayMs = (delayMinutes || 0) * 60 * 1000;
-    
     const sendFn = async () => {
-      let finalMessage = `${target} ⏰ **Recordatorio**: ${message}`;
-      if (gameActivity) {
-        finalMessage += `\n🎮 **Actividad:** ¡Vamos a jugar a **${gameActivity}**!`;
-      }
-      if (durationHours) {
-        finalMessage += ` durante las próximas **${durationHours} horas**.`;
-      }
+      const nowStr = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
       
-      await channel.send({
-        content: finalMessage,
+      const embed = new EmbedBuilder()
+        .setTitle('⏰ ¡Actividad Programada Activa!')
+        .setDescription(`**${resolvedTarget}**, es hora de comenzar la sesión de juego.`)
+        .setColor(0x1DB954)
+        .addFields(
+          { name: '🎮 Juego / Actividad', value: gameActivity ? `**${gameActivity}**` : 'Charla / General', inline: true },
+          { name: '⏱️ Duración de Sesión', value: durationHours ? `${durationHours} hora(s)` : 'Indefinida', inline: true },
+          { name: '👤 Programado por', value: resolvedTarget, inline: true },
+          { name: '📅 Hora de Programación', value: nowStr, inline: true },
+          { name: '💬 Mensaje / Nota', value: message || 'Sin notas adicionales', inline: false },
+          { name: '🔋 Estado de Actividad', value: '🟢 **Sesión Activa - Bot jugando actualmente**', inline: false }
+        )
+        .setTimestamp();
+
+      // Poner miniatura según el juego
+      const gameLower = (gameActivity || '').toLowerCase();
+      if (gameLower.includes('minecraft')) {
+        embed.setThumbnail('https://cdn.pixabay.com/photo/2021/08/17/14/06/minecraft-6553198_1280.png');
+      } else if (gameLower.includes('gta') || gameLower.includes('grand theft auto')) {
+        embed.setThumbnail('https://cdn2.iconfinder.com/data/icons/grand-theft-auto-v/512/gta_v_logo-512.png');
+      } else if (gameLower.includes('valorant')) {
+        embed.setThumbnail('https://cdn.icon-icons.com/icons2/3053/PNG/512/valorant_fist_logo_icon_192770.png');
+      } else if (gameLower.includes('league') || gameLower.includes('lol')) {
+        embed.setThumbnail('https://cdn2.iconfinder.com/data/icons/popular-games-1/24/League_of_Legends-512.png');
+      } else if (gameLower.includes('fortnite')) {
+        embed.setThumbnail('https://cdn2.iconfinder.com/data/icons/popular-games-1/24/Fortnite-512.png');
+      } else if (gameLower.includes('roblox')) {
+        embed.setThumbnail('https://cdn.icon-icons.com/icons2/3053/PNG/512/roblox_logo_icon_192801.png');
+      } else {
+        embed.setThumbnail(client.user.displayAvatarURL());
+      }
+
+      const sentMsg = await channel.send({
+        content: `${resolvedTarget}`,
+        embeds: [embed],
         allowedMentions: { parse: ['users', 'roles', 'everyone'] }
       });
       
-      // Cambiar estado del Bot automáticamente
+      // Limpiar sesión activa previa si existiese
+      if (activeSession) {
+        activeSession.timerIds.forEach(id => clearTimeout(id));
+        activeSession = null;
+      }
+
+      const timerIds = [];
+
+      // Inicializar canciones de la sesión activa si hay duración
+      if (durationHours > 0) {
+        activeSessionSongs = [];
+      }
+
+      const sendAlert = async (timeLeftMs) => {
+        const minutesLeft = Math.round(timeLeftMs / 60000);
+        let timeLeftStr = '';
+        if (minutesLeft >= 60) {
+          const hours = Math.floor(minutesLeft / 60);
+          const mins = minutesLeft % 60;
+          timeLeftStr = `${hours} hora(s)${mins > 0 ? ` y ${mins} minuto(s)` : ''}`;
+        } else {
+          timeLeftStr = `${minutesLeft} minuto(s)`;
+        }
+
+        const alertEmbed = new EmbedBuilder()
+          .setTitle('⏱️ ¡Tiempo de Sesión!')
+          .setDescription(`⚠️ **Atención ${resolvedTarget}**: Quedan **${timeLeftStr}** de la sesión de juego de **${gameActivity || 'Charla / General'}**.`)
+          .setColor(0xf39c12)
+          .setTimestamp();
+
+        await channel.send({
+          content: `${resolvedTarget}`,
+          embeds: [alertEmbed],
+          allowedMentions: { parse: ['users', 'roles', 'everyone'] }
+        }).catch(err => console.error('Error al enviar alerta de sesión:', err));
+      };
+
+      // Cambiar estado del Bot automáticamente si se definió un juego
+      let originalActivity = '';
+      let originalStatus = 'online';
       if (gameActivity && client.user) {
         const originalPresence = client.user.presence;
-        const originalActivity = originalPresence && originalPresence.activities.length > 0 ? originalPresence.activities[0].name : '';
-        const originalStatus = originalPresence ? originalPresence.status : 'online';
+        originalActivity = originalPresence && originalPresence.activities.length > 0 ? originalPresence.activities[0].name : '';
+        originalStatus = originalPresence ? originalPresence.status : 'online';
         
         client.user.setPresence({
           activities: [{ name: gameActivity, type: 0 }], // type 0 = Playing
           status: 'online'
         });
         console.log(`[RECORDATORIO] Bot puesto a jugar a: ${gameActivity}`);
-        
-        // Restaurar estado al acabar las horas de juego
-        if (durationHours > 0) {
-          setTimeout(() => {
-            if (client.user) {
-              client.user.setPresence({
-                activities: originalActivity ? [{ name: originalActivity, type: 0 }] : [],
-                status: originalStatus
-              });
-              console.log(`[RECORDATORIO] Actividad original restaurada tras cumplirse la sesión.`);
-            }
-          }, durationHours * 60 * 60 * 1000);
-        }
       }
-      
+
+      if (durationHours > 0) {
+        const totalDurationMs = durationHours * 60 * 60 * 1000;
+
+        activeSession = {
+          gameActivity,
+          durationHours,
+          channelId: channel.id,
+          startTime: Date.now(),
+          endTime: Date.now() + totalDurationMs,
+          originalActivity,
+          originalStatus,
+          timerIds
+        };
+        
+        // Alertas cada 30 minutos
+        for (let elapsedMins = 30; elapsedMins < durationHours * 60; elapsedMins += 30) {
+          const timeLeftMs = totalDurationMs - (elapsedMins * 60 * 1000);
+          if (timeLeftMs > 10 * 60 * 1000) {
+            const tid = setTimeout(() => {
+              sendAlert(timeLeftMs);
+            }, elapsedMins * 60 * 1000);
+            timerIds.push(tid);
+          }
+        }
+
+        // Alerta de 10 minutos restantes
+        if (totalDurationMs > 10 * 60 * 1000) {
+          const tid = setTimeout(() => {
+            sendAlert(10 * 60 * 1000);
+          }, totalDurationMs - 10 * 60 * 1000);
+          timerIds.push(tid);
+        }
+
+        // Alerta de 5 minutos restantes
+        if (totalDurationMs > 5 * 60 * 1000) {
+          const tid = setTimeout(() => {
+            sendAlert(5 * 60 * 1000);
+          }, totalDurationMs - 5 * 60 * 1000);
+          timerIds.push(tid);
+        }
+
+        // Alerta de 1 minuto restante
+        if (totalDurationMs > 1 * 60 * 1000) {
+          const tid = setTimeout(() => {
+            sendAlert(1 * 60 * 1000);
+          }, totalDurationMs - 1 * 60 * 1000);
+          timerIds.push(tid);
+        }
+
+        // Restaurar estado al acabar las horas de juego y actualizar el Embed de Discord con canciones reproducidas
+        const mainTid = setTimeout(async () => {
+          if (client.user && gameActivity) {
+            client.user.setPresence({
+              activities: originalActivity ? [{ name: originalActivity, type: 0 }] : [],
+              status: originalStatus
+            });
+            console.log(`[RECORDATORIO] Actividad original restaurada tras cumplirse la sesión.`);
+          }
+
+          // Editar mensaje para poner Actividad Terminada con la lista de canciones
+          try {
+            const songsList = formatSessionSongs();
+            const updatedEmbed = EmbedBuilder.from(embed)
+              .setColor(0xe74c3c)
+              .setTitle('🔴 Actividad Terminada')
+              .setFields(
+                { name: '🎮 Juego / Actividad', value: gameActivity ? `**${gameActivity}**` : 'Charla / General', inline: true },
+                { name: '⏱️ Duración de Sesión', value: durationHours ? `${durationHours} hora(s)` : 'Indefinida', inline: true },
+                { name: '👤 Programado por', value: resolvedTarget, inline: true },
+                { name: '📅 Hora de Programación', value: nowStr, inline: true },
+                { name: '💬 Mensaje / Nota', value: message || 'Sin notas adicionales', inline: false },
+                { name: '🔋 Estado de Actividad', value: '🏁 **Sesión Finalizada - Actividad Terminada**', inline: false },
+                { name: '🎵 Canciones Reproducidas en la Sesión', value: songsList.substring(0, 1024), inline: false }
+              );
+            await sentMsg.edit({ content: `🏁 **Actividad finalizada para ${resolvedTarget}**`, embeds: [updatedEmbed] });
+          } catch (editErr) {
+            console.error('Error al editar mensaje de recordatorio finalizado:', editErr);
+          }
+
+          activeSessionSongs = null; // Reiniciar
+          activeSession = null;
+        }, totalDurationMs);
+        timerIds.push(mainTid);
+      }
+
       console.log(`[RECORDATORIO] Recordatorio enviado a ${target}`);
     };
     
@@ -1140,6 +1609,58 @@ app.post('/api/reminder/schedule', async (req, res) => {
     }
     
     res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Endpoint para cancelar una actividad / sesión de juego activa
+app.post('/api/reminder/cancel', async (req, res) => {
+  if (activeSession) {
+    activeSession.timerIds.forEach(id => clearTimeout(id));
+    
+    // Mandar mensaje de cancelación a Discord
+    try {
+      const channel = await client.channels.fetch(activeSession.channelId);
+      if (channel) {
+        const embed = new EmbedBuilder()
+          .setTitle('🔴 Actividad Cancelada')
+          .setDescription(`La sesión de juego de **${activeSession.gameActivity || 'Charla / General'}** ha sido cancelada por el administrador.`)
+          .setColor(0xe74c3c)
+          .setTimestamp();
+        await channel.send({ embeds: [embed] });
+      }
+    } catch (e) {
+      console.error('Error al enviar mensaje de cancelación:', e);
+    }
+    
+    // Restaurar presencia
+    if (client.user && activeSession.gameActivity) {
+      client.user.setPresence({
+        activities: activeSession.originalActivity ? [{ name: activeSession.originalActivity, type: 0 }] : [],
+        status: activeSession.originalStatus || 'online'
+      });
+    }
+
+    activeSession = null;
+    activeSessionSongs = null;
+    return res.json({ success: true, message: 'Sesión cancelada correctamente.' });
+  }
+  res.status(404).json({ error: 'No hay ninguna sesión activa para cancelar.' });
+});
+
+// Endpoint para reproducir un texto por voz en Discord (Prueba de Voz TTS)
+app.post('/api/tts/speak', async (req, res) => {
+  const { text } = req.body;
+  if (!text) {
+    return res.status(400).json({ error: 'Falta el texto.' });
+  }
+  if (!voiceConnection || !audioPlayer) {
+    return res.status(400).json({ error: 'El bot no está conectado a un canal de voz.' });
+  }
+  try {
+    playTTS(text);
+    return res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
@@ -1260,8 +1781,10 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildPresences,
-    GatewayIntentBits.GuildMembers
-  ]
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.DirectMessages
+  ],
+  partials: [Partials.Channel, Partials.Message]
 });
 
 let voiceConnection = null;
@@ -1269,50 +1792,170 @@ let audioPlayer = null;
 let currentTrackId = null;
 let lastSyncProgressMs = 0;
 let lastSyncTimestamp = 0;
-let syncIntervalId = null;
+let syncTimeoutId = null;
 let inactivityTimeoutId = null;
 let lastTextChannel = null;
+let hasWarnedWitAi = false;
+let trackChangeTimeoutId = null;
+let lastErrorTimestamp = 0;
+const userVoiceData = new Map();
+let spotifyPauseTimeoutId = null;
+let lastTrackChangeTimestamp = 0;
+
+let activeSessionSongs = null;
+let activeSession = null;
+
+const activeClients = new Map();
+
+function stereoToMonoPCM(stereoBuffer) {
+  const numFrames = Math.floor(stereoBuffer.length / 4);
+  const monoBuffer = Buffer.alloc(numFrames * 2);
+  
+  for (let frame = 0; frame < numFrames; frame++) {
+    const leftSample = stereoBuffer.readInt16LE(frame * 4);
+    const rightSample = stereoBuffer.readInt16LE(frame * 4 + 2);
+    const monoSample = Math.round((leftSample + rightSample) / 2);
+    monoBuffer.writeInt16LE(monoSample, frame * 2);
+  }
+  return monoBuffer;
+}
+
+function downsampleTo16kHz(monoBuffer) {
+  const numSamples = monoBuffer.length / 2;
+  const targetSamples = Math.floor(numSamples / 3);
+  const targetBuffer = Buffer.alloc(targetSamples * 2);
+  
+  for (let i = 0; i < targetSamples; i++) {
+    const sample = monoBuffer.readInt16LE(i * 3 * 2);
+    targetBuffer.writeInt16LE(sample, i * 2);
+  }
+  return targetBuffer;
+}
+
+async function playTTS(text) {
+  if (!voiceConnection || !audioPlayer) return;
+  try {
+    const ttsUrl = `http://translate.google.com/translate_tts?ie=UTF-8&total=1&idx=0&textlen=128&client=tw-ob&q=${encodeURIComponent(text)}&tl=es`;
+    
+    // Pausar sincronización mientras suena la voz
+    const wasPlaying = currentPlaybackState.isPlaying;
+    if (wasPlaying) {
+      audioPlayer.pause();
+    }
+
+    const ttsResource = createAudioResource(ttsUrl, {
+      inputType: StreamType.Arbitrary,
+      inlineVolume: true
+    });
+    ttsResource.volume.setVolume(currentVolume);
+
+    isSoundboardPlaying = true;
+    audioPlayer.play(ttsResource);
+
+    // Esperar a que termine de hablar
+    await new Promise((resolve) => {
+      const stateChangeHandler = (oldState, newState) => {
+        if (newState.status === AudioPlayerStatus.Idle) {
+          audioPlayer.off('stateChange', stateChangeHandler);
+          resolve();
+        }
+      };
+      audioPlayer.on('stateChange', stateChangeHandler);
+      setTimeout(() => {
+        audioPlayer.off('stateChange', stateChangeHandler);
+        resolve();
+      }, 10000);
+    });
+
+    isSoundboardPlaying = false;
+    if (wasPlaying && currentYoutubeUrl) {
+      await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
+    }
+  } catch (err) {
+    console.error('Error al reproducir TTS:', err);
+    isSoundboardPlaying = false;
+  }
+}
+
+function formatSessionSongs() {
+  if (!activeSessionSongs || activeSessionSongs.length === 0) {
+    return 'No se reprodujeron canciones en esta sesión.';
+  }
+  return activeSessionSongs.map((s, idx) => `${idx + 1}. **${s.title}** - *${s.artist}*`).join('\n');
+}
 
 let currentYoutubeUrl = null;
 let activeFfmpegProcess = null;
+let activeYtdlpProcess = null;
 let isSyncing = false;
 let isChangingTrack = false;
 
 function setupAudioPlayer(connection) {
-  audioPlayer = createAudioPlayer();
+  if (!audioPlayer) {
+    audioPlayer = createAudioPlayer();
+
+    audioPlayer.on('stateChange', async (oldState, newState) => {
+      console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
+      
+      if (newState.status === AudioPlayerStatus.Idle) {
+        if (isChangingTrack) {
+          console.log('[REPRODUCTOR AUDIO] Cambio de cancion intencional detectado. Ignorando Idle.');
+          return;
+        }
+        
+        const token = await getValidAccessToken();
+        const isNearEnd = currentPlaybackState.durationMs && (currentPlaybackState.progressMs > currentPlaybackState.durationMs - 2000);
+        
+        if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing && !isSoundboardPlaying && !isRadioMode && !isNearEnd) {
+          logSystemError('ERR-01', 'Pérdida de red o Connection Reset de YouTube (10054). Iniciando reconexión auto-sanable...');
+          isSyncing = true;
+          setTimeout(async () => {
+            try {
+              if (!isChangingTrack) {
+                await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
+              }
+            } catch (e) {
+              logSystemError('ERR-01', 'Fallo al auto-reconectar el flujo tras caída de YouTube.', e);
+            } finally {
+              isSyncing = false;
+            }
+          }, 1000);
+        }
+      }
+    });
+
+    audioPlayer.on('error', error => {
+      logSystemError('ERR-04', 'Error controlado en el reproductor de audio de voz.', error);
+    });
+  }
   connection.subscribe(audioPlayer);
 
-  audioPlayer.on('stateChange', async (oldState, newState) => {
-    console.log(`[REPRODUCTOR AUDIO] Estado: ${oldState.status} -> ${newState.status}`);
-    
-    if (newState.status === AudioPlayerStatus.Idle) {
-      if (isChangingTrack) {
-        console.log('[REPRODUCTOR AUDIO] Cambio de cancion intencional detectado. Ignorando Idle.');
-        return;
-      }
-      
-      const token = await getValidAccessToken();
-      if (token && currentPlaybackState.isPlaying && currentYoutubeUrl && !isSyncing && !isSoundboardPlaying && !isRadioMode) {
-        logSystemError('ERR-01', 'Pérdida de red o Connection Reset de YouTube (10054). Iniciando reconexión auto-sanable...');
-        isSyncing = true;
-        setTimeout(async () => {
-          try {
-            if (!isChangingTrack) {
-              await streamYoutubeAtProgress(currentYoutubeUrl, currentPlaybackState.progressMs, true);
-            }
-          } catch (e) {
-            logSystemError('ERR-01', 'Fallo al auto-reconectar el flujo tras caída de YouTube.', e);
-          } finally {
-            isSyncing = false;
-          }
-        }, 1000);
-      }
-    }
-  });
+  hasWarnedWitAi = false;
+  
+  const registerSpeaking = () => {
+    console.log('[RECEPTOR DE VOZ] Conexión Lista (Ready). Registrando escuchador de voz...');
+    connection.receiver.speaking.on('start', (userId) => {
+      setupUserVoiceStream(connection, userId);
+    });
+  };
 
-  audioPlayer.on('error', error => {
-    logSystemError('ERR-04', 'Error controlado en el reproductor de audio de voz.', error);
-  });
+  if (connection.state.status === VoiceConnectionStatus.Ready) {
+    registerSpeaking();
+    setTimeout(async () => {
+      await playTTS("He ingresado al canal de voz.");
+    }, 1000);
+  } else {
+    const stateListener = (oldState, newState) => {
+      if (newState.status === VoiceConnectionStatus.Ready) {
+        registerSpeaking();
+        setTimeout(async () => {
+          await playTTS("He ingresado al canal de voz.");
+        }, 1000);
+        connection.off('stateChange', stateListener);
+      }
+    };
+    connection.on('stateChange', stateListener);
+  }
 }
 
 // Memoria persistente del último canal de voz activo para auto-reconexión
@@ -1359,6 +2002,29 @@ client.on('ready', async () => {
   // Iniciar bucle global automático para vigilar Spotify
   startSyncLoop(TESTING_CHANNEL_ID);
 
+  // Restaurar presencia guardada al iniciar
+  try {
+    const pres = readJSON(presenceFilePath, { status: 'online', activity: '', presenceType: 'playing', startTimestamp: null });
+    const typeMap = { playing: 0, listening: 2, watching: 3, competing: 5, custom: 4 };
+    const type = typeMap[pres.presenceType] !== undefined ? typeMap[pres.presenceType] : 0;
+    
+    const activityObj = { name: pres.activity, type: type };
+    if (pres.activity && type !== 4 && pres.startTimestamp) {
+      activityObj.timestamps = { start: pres.startTimestamp };
+    } else if (pres.activity && type === 4) {
+      activityObj.state = pres.activity;
+      activityObj.name = 'custom';
+    }
+
+    client.user.setPresence({
+      activities: pres.activity ? [activityObj] : [],
+      status: pres.status || 'online'
+    });
+    console.log(`[PRESENCIA] Restaurada presencia: Estado = ${pres.status}, Actividad = "${pres.activity}" (${pres.presenceType}), Inicio = ${pres.startTimestamp}`);
+  } catch (err) {
+    console.error('Error al restaurar presencia en ready:', err);
+  }
+
   // Anuncio al regresar de cambios directo al canal de testeo solicitado (1523120310809792713)
   if (fs.existsSync(stateFilePath)) {
     try {
@@ -1388,6 +2054,24 @@ client.on('ready', async () => {
 
 client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
+
+  // Interceptar mensajes directos (DM) al bot y registrarlos
+  if (message.channel.type === 1 || !message.guild) {
+    const userId = message.author.id;
+    if (!dmLogs[userId]) dmLogs[userId] = [];
+    dmLogs[userId].push({
+      id: message.id,
+      author: message.author.username,
+      avatar: message.author.displayAvatarURL({ size: 64 }) || 'https://cdn.discordapp.com/embed/avatars/0.png',
+      content: message.content,
+      timestamp: message.createdAt,
+      isMe: false
+    });
+    if (dmLogs[userId].length > 50) dmLogs[userId].shift();
+    writeJSON(dmHistoryFilePath, dmLogs); // Guardar historial persistente
+    console.log(`[DM RECIBIDO] de ${message.author.username}: ${message.content}`);
+    return; // Detener ejecución para que no intente ejecutar comandos normales en DM
+  }
 
   const content = message.content.trim();
 
@@ -1709,6 +2393,13 @@ function cleanupAndLeave() {
     clearTimeout(inactivityTimeoutId);
     inactivityTimeoutId = null;
   }
+
+  // Liberar streams de receptor de voz
+  for (const [userId, userData] of userVoiceData.entries()) {
+    if (userData.timeoutId) clearTimeout(userData.timeoutId);
+    try { userData.stream.destroy(); } catch (e) {}
+  }
+  userVoiceData.clear();
   
   if (voiceConnection) {
     try {
@@ -1732,6 +2423,12 @@ function stopActiveFfmpeg() {
     } catch (e) {}
     activeFfmpegProcess = null;
   }
+  if (activeYtdlpProcess) {
+    try {
+      activeYtdlpProcess.kill('SIGKILL');
+    } catch (e) {}
+    activeYtdlpProcess = null;
+  }
 }
 
 // -------------------------------------------------------------
@@ -1739,20 +2436,43 @@ function stopActiveFfmpeg() {
 // -------------------------------------------------------------
 function startSyncLoop(guildId) {
   stopSyncLoop();
-  console.log('Iniciando el bucle de sincronización con Spotify...');
-  syncIntervalId = setInterval(() => syncSpotifyPlayback(guildId), 3000);
+  console.log('Iniciando el bucle de sincronización dinámica con Spotify...');
+  
+  const poll = async () => {
+    let nextDelay = 2500; // 2.5s por defecto
+    try {
+      await syncSpotifyPlayback(guildId);
+      
+      // Si la canción está activa y le quedan menos de 12 segundos, o si Discord ya terminó (Idle) pero Spotify sigue sonando, aumentamos la frecuencia a 1s
+      if (currentPlaybackState && currentPlaybackState.isPlaying) {
+        const isDiscordIdle = audioPlayer && audioPlayer.state.status === AudioPlayerStatus.Idle;
+        const timeLeft = currentPlaybackState.durationMs - (currentPlaybackState.progressMs || 0);
+        if (isDiscordIdle || (timeLeft < 12000 && timeLeft > 0)) {
+          nextDelay = 1000; // Frecuencia ultra-rápida de 1s para cambio de canción al instante
+        }
+      }
+    } catch (e) {
+      console.error('Error en consulta de bucle de sincronización:', e);
+    }
+    
+    if (syncTimeoutId !== null) {
+      syncTimeoutId = setTimeout(poll, nextDelay);
+    }
+  };
+  
+  syncTimeoutId = setTimeout(poll, 100);
 }
 
 function stopSyncLoop() {
-  if (syncIntervalId) {
-    clearInterval(syncIntervalId);
-    syncIntervalId = null;
+  if (syncTimeoutId) {
+    clearTimeout(syncTimeoutId);
+    syncTimeoutId = null;
     console.log('Bucle de sincronización con Spotify detenido.');
   }
 }
 
 async function syncSpotifyPlayback(guildId) {
-  if (isSyncing || isSoundboardPlaying || isRadioMode) return;
+  if (isSoundboardPlaying || isRadioMode) return;
 
   const token = await getValidAccessToken();
   if (!token) return;
@@ -1773,6 +2493,7 @@ async function syncSpotifyPlayback(guildId) {
         audioPlayer.pause();
       }
       currentPlaybackState.isPlaying = false;
+      updatePresenceFromSpotify(false);
       checkInactivity(guildId, false);
       return;
     }
@@ -1780,6 +2501,7 @@ async function syncSpotifyPlayback(guildId) {
     const playback = await response.json();
     if (!playback || !playback.item) {
       currentPlaybackState.isPlaying = false;
+      updatePresenceFromSpotify(false);
       checkInactivity(guildId, false);
       return;
     }
@@ -1825,7 +2547,15 @@ async function syncSpotifyPlayback(guildId) {
       if (queueResponse.ok) {
         const queueData = await queueResponse.json();
         if (queueData && queueData.queue) {
-          queueList = queueData.queue.slice(0, 5).map(item => ({
+          // Filtrar duplicados consecutivos de la cola (glitch de repetición de Spotify)
+          const uniqueQueue = [];
+          for (const item of queueData.queue) {
+            if (uniqueQueue.length === 0 || uniqueQueue[uniqueQueue.length - 1].uri !== item.uri) {
+              uniqueQueue.push(item);
+            }
+          }
+
+          queueList = uniqueQueue.slice(0, 5).map(item => ({
             title: item.name,
             artist: item.artists.map(a => a.name).join(', '),
             coverUrl: item.album.images[0]?.url || '',
@@ -1859,14 +2589,23 @@ async function syncSpotifyPlayback(guildId) {
       speed: currentSpeed,
       queue: queueList,
       uri: playback.item.uri,
-      isFavorite: isSpotifyFavorite
+      isFavorite: isSpotifyFavorite,
+      trackNotFound: currentPlaybackState.trackNotFound,
+      notFoundTrackName: currentPlaybackState.notFoundTrackName
     };
 
     checkInactivity(guildId, isPlayingOnSpotify);
+    updatePresenceFromSpotify(isPlayingOnSpotify, trackName, artistName);
 
     if (trackId !== currentTrackId) {
       console.log(`Nueva canción detectada: "${trackName}" de ${artistName}`);
       currentTrackId = trackId;
+      lastTrackChangeTimestamp = Date.now();
+      isSyncing = false; // Interrumpir flujo anterior de sincronización para priorizar el salto
+
+      if (activeSessionSongs) {
+        activeSessionSongs.push({ title: trackName, artist: artistName });
+      }
       
       // Incrementar contador de canciones reproducidas
       const stats = readJSON(statsFilePath, { totalPlaySeconds: 0, totalTracksPlayed: 0 });
@@ -1885,19 +2624,43 @@ async function syncSpotifyPlayback(guildId) {
       if (history.length > 50) history.shift(); // limitar tamaño
       writeJSON(historyFilePath, history);
 
-      isSyncing = true;
-      await playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify);
-      isSyncing = false;
+      if (trackChangeTimeoutId) {
+        clearTimeout(trackChangeTimeoutId);
+      }
+
+      trackChangeTimeoutId = setTimeout(async () => {
+        isSyncing = true;
+        await playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify, coverUrl);
+        isSyncing = false;
+      }, 1500);
       return;
     }
 
+    // Si es la misma canción pero está en proceso de carga, retornar temprano
+    if (isSyncing) return;
+
+    const isDiscordPaused = audioPlayer.state.status === AudioPlayerStatus.Paused;
     const isDiscordPlaying = audioPlayer.state.status === AudioPlayerStatus.Playing;
-    if (isPlayingOnSpotify && !isDiscordPlaying) {
-      console.log('Spotify reanudado. Reanudando Discord.');
-      if (audioPlayer) audioPlayer.unpause();
-    } else if (!isPlayingOnSpotify && isDiscordPlaying) {
-      console.log('Spotify pausado. Pausando Discord.');
-      if (audioPlayer) audioPlayer.pause();
+    if (isPlayingOnSpotify) {
+      if (spotifyPauseTimeoutId) {
+        clearTimeout(spotifyPauseTimeoutId);
+        spotifyPauseTimeoutId = null;
+      }
+      if (isDiscordPaused) {
+        console.log('Spotify reanudado. Reanudando Discord.');
+        if (audioPlayer) audioPlayer.unpause();
+      }
+    } else {
+      if (isDiscordPlaying && !spotifyPauseTimeoutId) {
+        console.log('Spotify pausado. Programando pausa en Discord en 4 segundos...');
+        spotifyPauseTimeoutId = setTimeout(() => {
+          if (audioPlayer && audioPlayer.state.status === AudioPlayerStatus.Playing) {
+            console.log('Confirmado: Spotify sigue pausado. Pausando Discord.');
+            audioPlayer.pause();
+          }
+          spotifyPauseTimeoutId = null;
+        }, 4000);
+      }
     }
 
     if (isPlayingOnSpotify) {
@@ -1905,10 +2668,17 @@ async function syncSpotifyPlayback(guildId) {
       const expectedProgress = lastSyncProgressMs + Math.round(timeSinceLastSync * currentSpeed);
       const drift = Math.abs(progressMs - expectedProgress);
 
-      if (drift > 15000) {
+      const isNearEnd = durationMs && (progressMs > durationMs - 2000);
+      const isCooldownActive = (Date.now() - lastErrorTimestamp) < 10000;
+      const isTrackChangeCooldownActive = (Date.now() - lastTrackChangeTimestamp) < 15000;
+      if (drift > 6000 && !isNearEnd && !isCooldownActive && !isTrackChangeCooldownActive) {
         console.log(`Desfase mayor a 15s detectado (${drift}ms). Ajustando reproducción de Discord al segundo: ${Math.round(progressMs / 1000)}s.`);
         isSyncing = true;
-        await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify);
+        if (currentYoutubeUrl) {
+          await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify);
+        } else {
+          await playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify);
+        }
         isSyncing = false;
       } else {
         lastSyncProgressMs = progressMs;
@@ -1943,13 +2713,283 @@ function checkInactivity(guildId, isPlaying) {
 
           lastTextChannel.send({ embeds: [embed] });
         }
-        cleanupAndLeave();
+        playTTS("Me tendré que salir del canal de voz por inactividad.").then(() => {
+          cleanupAndLeave();
+        }).catch(() => {
+          cleanupAndLeave();
+        });
       }, 120000);
     }
   }
 }
 
-async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify) {
+function updatePresenceFromSpotify(isPlaying, trackName = '', artistName = '') {
+  try {
+    const pres = readJSON(presenceFilePath, { status: 'online', activity: '', presenceType: 'playing', startTimestamp: null });
+    if (isPlaying && trackName) {
+      if (client.user) {
+        client.user.setPresence({
+          activities: [{ name: `${trackName} - ${artistName}`, type: 2 }], // 2 = Listening
+          status: pres.status || 'online'
+        });
+      }
+    } else {
+      if (client.user) {
+        const typeMap = { playing: 0, listening: 2, watching: 3, competing: 5, custom: 4 };
+        const type = typeMap[pres.presenceType] !== undefined ? typeMap[pres.presenceType] : 0;
+        
+        const activityObj = { name: pres.activity, type: type };
+        if (pres.activity && type !== 4 && pres.startTimestamp) {
+          activityObj.timestamps = { start: pres.startTimestamp };
+        } else if (pres.activity && type === 4) {
+          activityObj.state = pres.activity;
+          activityObj.name = 'custom';
+        }
+
+        client.user.setPresence({
+          activities: pres.activity ? [activityObj] : [],
+          status: pres.status || 'online'
+        });
+      }
+    }
+  } catch (err) {
+    console.error('Error al actualizar presencia dinámica de Spotify:', err);
+  }
+}
+
+function setupUserVoiceStream(connection, userId) {
+  if (userVoiceData.has(userId)) return;
+
+  console.log(`[RECEPTOR DE VOZ] Suscribiéndose de forma persistente al habla de: ${userId}`);
+  
+  try {
+    const audioStream = connection.receiver.subscribe(userId, {
+      end: {
+        behavior: EndBehaviorType.Manual
+      },
+      mode: 'pcm'
+    });
+
+    const userData = {
+      chunks: [],
+      timeoutId: null,
+      stream: audioStream
+    };
+
+    userVoiceData.set(userId, userData);
+
+    audioStream.on('data', (chunk) => {
+      // Ignorar entrada de voz si el bot ya está reproduciendo música para evitar bucles o falsos positivos
+      if (currentPlaybackState.isPlaying) {
+        if (userData.chunks.length > 0) userData.chunks = [];
+        if (userData.timeoutId) clearTimeout(userData.timeoutId);
+        return;
+      }
+
+      userData.chunks.push(chunk);
+
+      if (userData.timeoutId) {
+        clearTimeout(userData.timeoutId);
+      }
+
+      userData.timeoutId = setTimeout(async () => {
+        const buffer = Buffer.concat(userData.chunks);
+        userData.chunks = [];
+
+        console.log(`[RECEPTOR DE VOZ] Silencio detectado para ${userId}. Buffer acumulado: ${buffer.length} bytes.`);
+        
+        if (buffer.length >= 1000) { // Reducido para permitir capturar audios cortos como comandos rápidos
+          await processVoiceCommand(userId, buffer);
+        } else {
+          console.log(`[RECEPTOR DE VOZ] Audio descartado por ser demasiado corto (${buffer.length} bytes).`);
+        }
+      }, 1500); // 1.5s de silencio antes de procesar
+    });
+
+    audioStream.on('end', () => {
+      console.log(`[RECEPTOR DE VOZ] Stream de voz finalizado para usuario: ${userId}`);
+      if (userData.timeoutId) clearTimeout(userData.timeoutId);
+      userVoiceData.delete(userId);
+    });
+
+    audioStream.on('error', (err) => {
+      // Ignorar de forma silenciosa errores de descifrado del protocolo DAVE E2EE de Discord
+      if (err.message && err.message.includes('decrypt')) {
+        return;
+      }
+      console.error(`[RECEPTOR DE VOZ] Error en el flujo de voz de ${userId}:`, err);
+    });
+  } catch (err) {
+    console.error(`Error al configurar stream de voz para ${userId}:`, err);
+  }
+}
+
+async function sendWitAiConfigEmbed() {
+  try {
+    const channel = await client.channels.fetch(TESTING_CHANNEL_ID);
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setTitle('🎙️ ¡Comandos de Voz Detectados!')
+        .setDescription(
+          `He detectado que estás hablando, pero la función de reconocimiento de voz requiere configuración.\n\n` +
+          `**Para activarla de forma gratuita en 10 segundos:**\n` +
+          `1. Crea una cuenta gratuita en **[Wit.ai](https://wit.ai)** (propiedad de Meta).\n` +
+          `2. Crea una aplicación rápida con cualquier nombre.\n` +
+          `3. Ve a **Settings** (Configuración) y copia tu **Server Access Token**.\n` +
+          `4. Agrégalo en tu archivo \`.env\` como \`WIT_AI_TOKEN=tu_token_aqui\` y reinicia el bot.\n\n` +
+          `*¡Una vez configurado, podrás decir: **"bot busca [canción]"** o **"bot musica [canción]"** en el canal de voz!*`
+        )
+        .setColor(0x1DB954)
+        .setThumbnail(client.user.displayAvatarURL());
+      await channel.send({ embeds: [embed] });
+    }
+  } catch (err) {
+    console.error('Error al enviar embed explicativo de Wit.ai:', err);
+  }
+}
+
+async function sendVoiceSearchEmbed(username, query) {
+  try {
+    const channel = await client.channels.fetch(TESTING_CHANNEL_ID);
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setTitle('🗣️ Comando de Voz Recibido')
+        .setDescription(`**${username}** solicitó reproducir: **${query}**\n🔎 Buscando canción y reproduciendo...`)
+        .setColor(0x1DB954)
+        .setTimestamp();
+      await channel.send({ embeds: [embed] });
+    }
+  } catch (err) {
+    console.error('Error al enviar embed de búsqueda de voz:', err);
+  }
+}
+
+async function processVoiceCommand(userId, pcmBuffer) {
+  // Doble validación: no procesar voz si ya hay música sonando
+  if (currentPlaybackState.isPlaying) {
+    return;
+  }
+
+  const token = process.env.WIT_AI_TOKEN;
+  if (!token) {
+    if (!hasWarnedWitAi) {
+      hasWarnedWitAi = true;
+      await sendWitAiConfigEmbed();
+    }
+    return;
+  }
+  
+  try {
+    const user = await client.users.fetch(userId);
+    const username = user ? user.username : 'Usuario';
+
+    console.log(`[VOZ RECEPTOR] Enviando audio de ${username} a Wit.ai...`);
+    const monoBuffer = stereoToMonoPCM(pcmBuffer);
+    const downsampledBuffer = downsampleTo16kHz(monoBuffer);
+    const response = await fetch('https://api.wit.ai/speech?v=20230215', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'audio/raw;encoding=signed-integer;bits=16;rate=16000;endian=little'
+      },
+      body: downsampledBuffer
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[VOZ ERROR] Wit.ai respondió con estado ${response.status}: ${errText}`);
+      return;
+    }
+
+    const data = await response.json();
+    if (data.error) {
+      console.error(`[VOZ ERROR] Wit.ai devolvió un error de negocio:`, data);
+      return;
+    }
+
+    const text = data.text ? data.text.trim() : '';
+    console.log(`[VOZ DETECTADO] Texto transcrito por Wit.ai: "${text}"`);
+    
+    if (text) {
+      console.log(`[VOZ] ${username} dijo: "${text}"`);
+      await handleSpeechTextCommand(username, text);
+    }
+  } catch (err) {
+    console.error('Error al procesar comando de voz:', err);
+  }
+}
+
+async function handleSpeechTextCommand(username, text) {
+  const cleanText = text.toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g,"");
+
+  const match = cleanText.match(/^(bot busca|bot musica|bot pon|bot reproduce)\s+(.+)$/);
+  if (match) {
+    const query = match[2].trim();
+    console.log(`[VOZ COMMAND] Buscando canción: "${query}"`);
+    await sendVoiceSearchEmbed(username, query);
+    await playSongFromVoiceQuery(query);
+  }
+}
+
+async function playSongFromVoiceQuery(query) {
+  const token = await getValidAccessToken();
+  if (!token) return;
+  try {
+    const response = await fetch(`https://api.spotify.com/v1/search?q=${encodeURIComponent(query)}&type=track&limit=1`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const track = data.tracks.items[0];
+      if (track) {
+        console.log(`[VOZ PLAY] Reproduciendo track: "${track.name}" - ${track.uri}`);
+        
+        await fetch('https://api.spotify.com/v1/me/player/play', {
+          method: 'PUT',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ uris: [track.uri] })
+        });
+      } else {
+        await sendTrackNotFoundEmbed(query, 'Búsqueda por voz');
+      }
+    }
+  } catch (err) {
+    console.error('Error al reproducir desde comando de voz:', err);
+  }
+}
+
+async function sendTrackNotFoundEmbed(trackName, artistName, coverUrl = null) {
+  try {
+    const channel = await client.channels.fetch(TESTING_CHANNEL_ID);
+    if (channel) {
+      const embed = new EmbedBuilder()
+        .setTitle('🔍 Canción No Encontrada')
+        .setDescription(
+          `⚠️ **Lo siento, no logré localizar esta canción en YouTube**\n\n` +
+          `🎵 **Tema**: \`${trackName}\`\n` +
+          `👤 **Artista**: \`${artistName}\`\n\n` +
+          `💡 *Como no encontré una versión de audio compatible, no sonará en el bot de Discord. ¡Por favor, salta esta canción en tu Spotify o pon otra pista para continuar escuchando música!* 🎶`
+        )
+        .setColor(0xe74c3c)
+        .setTimestamp();
+
+      if (coverUrl && coverUrl.startsWith('http')) {
+        embed.setThumbnail(coverUrl);
+      } else {
+        embed.setThumbnail(client.user.displayAvatarURL());
+      }
+      
+      await channel.send({ embeds: [embed] });
+      await playTTS("La siguiente canción no fue encontrada.");
+    }
+  } catch (err) {
+    console.error('Error al enviar mensaje de canción no encontrada:', err);
+  }
+}
+
+async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotify, coverUrl = null) {
   try {
     isChangingTrack = true;
     const searchQuery = `${trackName} ${artistName} official audio`;
@@ -1959,42 +2999,101 @@ async function playNewTrack(trackName, artistName, progressMs, isPlayingOnSpotif
     if (searchResults.length === 0) {
       logSystemError('ERR-03', `No se encontraron resultados en YouTube para: ${searchQuery}`);
       isChangingTrack = false;
+      currentPlaybackState.trackNotFound = true;
+      currentPlaybackState.notFoundTrackName = trackName;
+      sendTrackNotFoundEmbed(trackName, artistName, coverUrl);
       return;
     }
 
+    currentPlaybackState.trackNotFound = false;
+    currentPlaybackState.notFoundTrackName = '';
     currentYoutubeUrl = searchResults[0].url;
     console.log(`Stream de YouTube encontrado: ${currentYoutubeUrl}`);
     await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify);
   } catch (error) {
+    lastErrorTimestamp = Date.now();
     logSystemError('ERR-03', 'Error crítico en búsqueda de YouTube.', error);
+    currentPlaybackState.trackNotFound = true;
+    currentPlaybackState.notFoundTrackName = trackName;
+    sendTrackNotFoundEmbed(trackName, artistName, coverUrl);
   }
 }
 
-async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
+async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify, forceFallback = false) {
   try {
+    if (!url || typeof url !== 'string' || !url.startsWith('http')) {
+      throw new Error(`URL de YouTube inválida: ${url}`);
+    }
+
     isChangingTrack = true;
     stopActiveFfmpeg();
 
     const seekSeconds = Math.floor(progressMs / 1000);
-    console.log(`Obteniendo flujo de audio directo de YouTube...`);
+    console.log(`Obteniendo flujo de audio directo de YouTube con yt-dlp...`);
     const directAudioUrl = await getDirectAudioUrl(url);
 
-    // Validación de seguridad de desconexión del reproductor
     if (!audioPlayer) {
       console.log('El reproductor de audio se desconectó durante la resolución de red de YouTube. Transmisión cancelada.');
       isChangingTrack = false;
       return;
     }
 
-    console.log(`Abriendo proceso FFmpeg para transmitir desde el segundo ${seekSeconds} (PCM Crudo, Velocidad: x${currentSpeed})...`);
-    
+    let response;
+    let streamInput;
+    let useYtdlpFallback = forceFallback;
+
+    if (!useYtdlpFallback) {
+      try {
+        console.log(`Descargando stream con fetch y transmitiendo a FFmpeg desde el segundo ${seekSeconds}...`);
+        response = await fetch(directAudioUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+
+        if (!response.ok) {
+          console.warn(`[TRANSMISIÓN] Fetch directo de audio falló (${response.status}). Activando fallback de yt-dlp...`);
+          useYtdlpFallback = true;
+        } else {
+          streamInput = Readable.fromWeb(response.body);
+        }
+      } catch (fetchErr) {
+        console.warn(`[TRANSMISIÓN] Error en fetch directo. Activando fallback de yt-dlp...`, fetchErr);
+        useYtdlpFallback = true;
+      }
+    }
+
+    if (useYtdlpFallback) {
+      console.log(`[FALLBACK YT-DLP] Descargando y transmitiendo directamente usando proceso nativo de yt-dlp.exe...`);
+      activeYtdlpProcess = spawn(ytDlpPath, [
+        '-o', '-',
+        '-f', 'bestaudio',
+        '--no-playlist',
+        url
+      ]);
+      streamInput = activeYtdlpProcess.stdout;
+      
+      activeYtdlpProcess.on('error', (e) => {
+        console.error('[FALLBACK YT-DLP] Error al levantar proceso yt-dlp:', e);
+      });
+      activeYtdlpProcess.stderr.on('data', (d) => {
+        // Ignorado
+      });
+    }
+
     const ffmpegArgs = [
-      '-ss', seekSeconds.toString(),
-      '-i', directAudioUrl,
+      '-i', 'pipe:0'
+    ];
+
+    if (seekSeconds > 0) {
+      ffmpegArgs.push('-ss', seekSeconds.toString());
+    }
+
+    ffmpegArgs.push(
       '-f', 's16le',
       '-ar', '48000',
       '-ac', '2'
-    ];
+    );
 
     if (currentSpeed !== 1.0) {
       ffmpegArgs.push('-af', `atempo=${currentSpeed}`);
@@ -2003,8 +3102,18 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     ffmpegArgs.push('pipe:1');
 
     activeFfmpegProcess = spawn(ffmpegPath, ffmpegArgs, {
-      stdio: ['ignore', 'pipe', 'pipe']
+      stdio: ['pipe', 'pipe', 'pipe']
     });
+
+    streamInput.on('error', (err) => {
+      // Ignorado
+    });
+
+    activeFfmpegProcess.stdin.on('error', (err) => {
+      // Ignorado
+    });
+
+    streamInput.pipe(activeFfmpegProcess.stdin);
 
     activeFfmpegProcess.stderr.on('data', (data) => {
       // Ignorado
@@ -2012,6 +3121,28 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
 
     activeFfmpegProcess.on('exit', (code, signal) => {
       console.log(`[FFMPEG PROCESO] Salida del proceso. Codigo: ${code}, Senal: ${signal}`);
+      if (useYtdlpFallback && activeYtdlpProcess) {
+        try { activeYtdlpProcess.kill('SIGKILL'); } catch (e) {}
+        activeYtdlpProcess = null;
+      }
+
+      // Si FFmpeg falló con error (ej. code !== 0 y no fue cancelado por cambio de canción intencional)
+      if (code !== 0 && code !== null && signal !== 'SIGKILL' && !isChangingTrack) {
+        lastErrorTimestamp = Date.now();
+        console.warn(`[FFMPEG ERROR] FFmpeg terminó con código de error ${code}. Reintentando reproducción forzando fallback de yt-dlp...`);
+        isSyncing = true;
+        setTimeout(async () => {
+          try {
+            if (currentYoutubeUrl) {
+              await streamYoutubeAtProgress(currentYoutubeUrl, progressMs, isPlayingOnSpotify, true);
+            }
+          } catch (err) {
+            console.error('[FALLBACK] Error al reintentar reproducción:', err);
+          } finally {
+            isSyncing = false;
+          }
+        }, 1500);
+      }
     });
 
     currentAudioResource = createAudioResource(activeFfmpegProcess.stdout, {
@@ -2033,7 +3164,9 @@ async function streamYoutubeAtProgress(url, progressMs, isPlayingOnSpotify) {
     lastSyncTimestamp = Date.now();
     isChangingTrack = false;
   } catch (error) {
+    lastErrorTimestamp = Date.now();
     logSystemError('ERR-01', 'Fallo al abrir o decodificar flujo de audio con FFmpeg.', error);
+    isChangingTrack = false;
   }
 }
 
@@ -2064,6 +3197,24 @@ const handleShutdown = async () => {
   }
   
   cleanupAndLeave();
+
+  if (activeSessionSongs && activeSessionSongs.length > 0) {
+    try {
+      const testingChannel = await client.channels.fetch(TESTING_CHANNEL_ID);
+      if (testingChannel) {
+        const songsList = formatSessionSongs();
+        const embed = new EmbedBuilder()
+          .setTitle('📋 Sesión Cerrada - Canciones Reproducidas')
+          .setDescription(songsList.substring(0, 4096))
+          .setColor(0xe74c3c)
+          .setTimestamp();
+        await testingChannel.send({ embeds: [embed] });
+      }
+    } catch (e) {
+      console.error('Error al enviar canciones de la sesión en apagado:', e);
+    }
+    activeSessionSongs = null;
+  }
   
   setTimeout(() => {
     process.exit(0);

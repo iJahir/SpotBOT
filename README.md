@@ -10,6 +10,9 @@ Incluye un **Panel de Control Glassmorphic interactivo** optimizado para computa
 
 * 🎵 **Sincronización Spotify en Tiempo Real**: Sincroniza la música de tu Spotify con un canal de voz de Discord. Si pausas, adelantas o cambias de canción en tu aplicación de Spotify, el bot lo imita en Discord.
 * 📱 **Panel Web y Móvil Premium**: Controla el volumen, busca y encola canciones, cambia la velocidad de la música (x1.0, x1.5, x2.0) y chatea en Discord desde tu teléfono o computadora.
+* 📝 **Letras de Canciones en Tiempo Real**: Visualiza la letra de la canción actual en reproducción directamente desde el panel web de forma automática o manual.
+* 💬 **Mensajes Privados (DM)**: Lee y envía mensajes directos (DMs) a los usuarios de Discord desde el panel de control web, con historial de chat y avatares en tiempo real.
+* 🎙️ **Monitoreo de Canales de Voz**: Visualiza todos los canales de voz activos en tus servidores, quién está conectado, su estado de audio (silenciado, ensordecido, bot) y si SpotBOT está presente en el canal.
 * 🔊 **Soundboard Integrado**: Reproduce los sonidos oficiales por defecto de Discord (`quack` 🦆, `airhorn` 📢, `cricket` 🦗, `golf clap` 👏, `sad horn` 📯 y `ba dum tss` 🥁) y los sonidos personalizados que la gente haya subido a tu servidor de Discord.
 * ⏰ **Programador de Alertas**: Envía menciones programadas (`@everyone`, `@here` o miembros individuales) para avisar de sesiones de juego, cambiando automáticamente la presencia del bot en Discord por la duración que especifiques.
 * 🟢 **Control de Presencia**: Ajusta el estado de conexión del bot (Online, Ausente, No Molestar) y su juego activo directamente desde la web.

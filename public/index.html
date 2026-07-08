@@ -975,11 +975,94 @@
     .indicator-green { background: #00ff66; box-shadow: 0 0 6px #00ff66; }
     .indicator-yellow { background: #ffcc00; box-shadow: 0 0 6px #ffcc00; }
     .indicator-red { background: #ff3333; box-shadow: 0 0 6px #ff3333; }
-
     .status-card-value {
       font-size: 1.25rem;
       font-weight: 700;
       color: white;
+    }
+
+    /* Discord Mock Channel View Styles */
+    .discord-guild-box {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .discord-guild-title {
+      font-size: 0.8rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding-bottom: 4px;
+    }
+    .discord-channel-row {
+      margin-left: 4px;
+      margin-bottom: 10px;
+    }
+    .discord-channel-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #b9bbbe;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 6px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .discord-channel-name:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: white;
+    }
+    .discord-channel-name.active-channel {
+      color: var(--primary);
+      background: rgba(29, 185, 84, 0.1);
+      font-weight: bold;
+    }
+    .discord-members-list {
+      margin-left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+      margin-bottom: 4px;
+    }
+    .discord-member-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .discord-member-avatar {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      object-fit: cover;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+    .discord-member-name {
+      font-size: 0.8rem;
+      color: #dcddde;
+    }
+    .discord-member-badge {
+      font-size: 0.6rem;
+      background: var(--primary);
+      color: black;
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-weight: bold;
+      letter-spacing: 0.2px;
+    }
+    .discord-member-status-icon {
+      font-size: 0.75rem;
+      margin-left: auto;
+      display: inline-flex;
+      gap: 4px;
     }
 
     /* Toast */
@@ -1019,11 +1102,13 @@
         <span class="status-pill online">● Online</span>
         <span class="status-pill servers" id="statusServers">Servidores: --</span>
         <span class="status-pill voice" id="statusVoice">Voz: --</span>
+        <span class="status-pill active-clients" id="statusClients" style="color: #ff00cc; border-color: rgba(255, 0, 204, 0.2); background: rgba(255, 0, 204, 0.05); font-weight: bold;" title="IPs conectadas: --">Panel: --</span>
       </div>
 
-      <!-- Pestañas de Navegación -->
       <div class="tabs-nav">
         <button class="tab-btn active" onclick="switchTab('reproductor')">🎵 Música</button>
+        <button class="tab-btn" onclick="switchTab('letras')">🎤 Letras</button>
+        <button class="tab-btn" onclick="switchTab('canales')">📞 Canales</button>
         <button class="tab-btn" onclick="switchTab('chat')">💬 Chat</button>
         <button class="tab-btn" onclick="switchTab('estado')">📊 Estado</button>
         <button class="tab-btn" onclick="switchTab('historial-fav')">📜 Historial</button>
@@ -1121,6 +1206,21 @@
           </div>
         </div>
 
+        <!-- Conexión de Voz de Discord -->
+        <div class="control-row">
+          <span class="control-label">🔌 Conexión de Voz (Discord)</span>
+          <div class="search-container" style="display: flex; flex-direction: column; gap: 8px;">
+            <select class="channel-select" id="voiceChannelSelect">
+              <option value="">Cargando canales de voz...</option>
+            </select>
+            <div style="display: flex; gap: 8px; width: 100%;">
+              <button class="btn-send" style="flex: 1; height: 38px; font-size: 0.8rem; background: var(--primary);" onclick="connectVoice('conectar')">Conectar</button>
+              <button class="btn-send" style="flex: 1; height: 38px; font-size: 0.8rem; background: #ff9900; box-shadow: 0 4px 10px rgba(255, 153, 0, 0.25);" onclick="connectVoice('mover')">Mover</button>
+              <button class="btn-send" style="flex: 1; height: 38px; font-size: 0.8rem; background: #ff3333; box-shadow: 0 4px 10px rgba(255, 51, 51, 0.25);" onclick="disconnectVoice()">Desconectar</button>
+            </div>
+          </div>
+        </div>
+
         <!-- Panel de Sonidos (Soundboard) -->
         <div class="control-row">
           <span class="control-label">🔊 Panel de Sonidos (Soundboard Discord)</span>
@@ -1139,6 +1239,9 @@
               <div style="display: flex; gap: 8px; width: 100%;">
                 <select class="channel-select" id="presenceType" style="flex: 1;">
                   <option value="playing">🕹️ Jugando a...</option>
+                  <option value="listening">🎧 Escuchando...</option>
+                  <option value="watching">📺 Viendo...</option>
+                  <option value="competing">🏆 Compitiendo en...</option>
                   <option value="custom">💬 Estado Personalizado</option>
                 </select>
                 <select class="channel-select" id="presenceStatus" style="width: 130px;">
@@ -1222,6 +1325,57 @@
               </div>
             </div>
 
+            <!-- Caja de Sesión Activa con Botón de Cancelación -->
+            <div id="activeSessionInfoContainer" style="display: none; flex-direction: column; gap: 6px; padding: 10px; background: rgba(255, 51, 51, 0.08); border: 1px solid rgba(255, 51, 51, 0.2); border-radius: 12px; margin-top: 6px;">
+              <div style="font-size: 0.8rem; font-weight: bold; color: #ff6666; display: flex; align-items: center; justify-content: space-between;">
+                <span>🎮 Sesión Activa de Juego</span>
+                <button onclick="cancelReminder()" class="btn-danger" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; height: auto;">Cancelar Sesión</button>
+              </div>
+              <div style="font-size: 0.75rem; color: var(--text-muted);" id="activeSessionText"></div>
+            </div>
+
+          </div>
+
+          <!-- Prueba de Voz (TTS) -->
+          <label class="control-label">🗣️ Prueba de Voz (TTS)</label>
+          <div class="search-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Escribe un texto para que el bot lo hable en Discord:</span>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" class="chat-input" id="ttsTextInput" placeholder="Ej: Hola, probando la voz del bot..." style="flex: 1;">
+                <button class="btn-send" style="width: auto; padding: 0 20px;" onclick="sendTTS()">Decir</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Enviar Mensaje Privado (DM) -->
+          <label class="control-label">📩 Enviar Mensaje Privado (DM)</label>
+          <div class="search-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px;">
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Seleccionar Miembro o ingresar ID</span>
+              <div style="display: flex; gap: 8px;">
+                <select class="channel-select" id="dmTargetSelect" onchange="onDmTargetChanged(this.value)" style="flex: 1;">
+                  <option value="">-- Selecciona un miembro del canal --</option>
+                </select>
+                <input type="text" class="chat-input" id="dmTargetId" placeholder="ID de usuario..." style="width: 180px;" oninput="onDmTargetIdInput(this.value)">
+              </div>
+            </div>
+
+            <!-- DM Conversation Viewer -->
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%; display: none;" id="dmViewerContainer">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Conversación DM Privada</span>
+              <div class="messages-viewer" id="dmMessagesViewer" style="height: 180px; margin-bottom: 8px;">
+                <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 50px;">No hay mensajes DM cargados</div>
+              </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 4px; width: 100%;">
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600;">Mensaje Privado</span>
+              <div style="display: flex; gap: 8px;">
+                <input type="text" class="chat-input" id="dmMessageInput" placeholder="Escribe el mensaje privado..." onkeydown="if(event.key==='Enter') sendDM()">
+                <button class="btn-send" style="height: 48px;" onclick="sendDM()">Enviar DM</button>
+              </div>
+            </div>
           </div>
 
           <label class="control-label">Bandeja de Entrada</label>
@@ -1399,6 +1553,26 @@
             • <b>ERR-05</b>: Error al escribir mensaje en Discord.
           </div>
         </div>
+      <!-- PESTAÑA 7: LETRAS -->
+      <div id="tab-letras" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+          <h2 style="font-size: 1.1rem; color: white; margin: 0; font-weight: 700;" id="lyricsSongTitle">Esperando canción...</h2>
+          <button class="btn-send" style="width: auto; height: 32px; padding: 0 16px; font-size: 0.75rem; background: var(--primary);" onclick="loadLyrics(true)">🔄 Recargar</button>
+        </div>
+        <div class="messages-viewer" id="lyricsViewer" style="height: 380px; font-size: 0.95rem; line-height: 1.6; text-align: center; white-space: pre-line; padding: 20px; overflow-y: auto; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; color: var(--text-normal); font-family: 'Outfit', sans-serif;">
+          Inicia la reproducción de una canción en Spotify para cargar su letra de forma automática.
+        </div>
+      </div>
+
+      <!-- PESTAÑA 8: CANALES Y MIEMBROS ACTIVOS -->
+      <div id="tab-canales" class="tab-content">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <span class="control-label" style="margin: 0; font-size: 0.95rem; font-weight: 700; color: white;">🌐 Canales de Voz y Miembros Conectados</span>
+          <button class="btn-send" style="width: auto; height: 32px; padding: 0 16px; font-size: 0.75rem; background: var(--primary);" onclick="loadActiveVoiceChannels()">🔄 Actualizar</button>
+        </div>
+        <div id="activeVoiceChannelsContainer" style="display: flex; flex-direction: column; gap: 12px; max-height: 450px; overflow-y: auto; padding-right: 4px;">
+          <div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px; width: 100%;">Cargando estado de canales de voz...</div>
+        </div>
       </div>
 
       <!-- Guía de Ayuda Rápida -->
@@ -1434,14 +1608,22 @@
 
     // Guardar los datos de la canción para favoritos
     let lastTrackData = { title: '', artist: '', coverUrl: '', uri: '' };
+    let lastAlertedTrackUri = '';
 
-    function showToast(message) {
+    function showToast(message, type = 'success') {
       const toast = document.getElementById('toast');
       toast.innerText = message;
+      if (type === 'warning') {
+        toast.style.background = '#ff9900';
+        toast.style.boxShadow = '0 4px 12px rgba(255, 153, 0, 0.4)';
+      } else {
+        toast.style.background = '#1DB954';
+        toast.style.boxShadow = '0 4px 12px rgba(29, 185, 84, 0.4)';
+      }
       toast.classList.add('show');
       setTimeout(() => {
         toast.classList.remove('show');
-      }, 3000);
+      }, 3500);
     }
 
     function formatTime(ms) {
@@ -1484,6 +1666,19 @@
         loadLogs();
       }
 
+      if (tabId === 'letras') {
+        loadLyrics();
+      }
+
+      if (tabId === 'canales') {
+        loadActiveVoiceChannels();
+        clearInterval(activeVoiceInterval);
+        activeVoiceInterval = setInterval(loadActiveVoiceChannels, 3000);
+      } else {
+        clearInterval(activeVoiceInterval);
+        activeVoiceInterval = null;
+      }
+
       if (tabId === 'historial') {
         loadLogFile();
       }
@@ -1506,6 +1701,11 @@
           uri: data.uri || ''
         };
 
+        if (data.trackNotFound && data.notFoundTrackName && lastAlertedTrackUri !== data.uri) {
+          lastAlertedTrackUri = data.uri;
+          showToast(`⚠️ No se encontró en YouTube: "${data.notFoundTrackName}"`, "warning");
+        }
+
         // Barra de estado
         document.getElementById('statusServers').innerText = `Servidores: ${data.guildCount}`;
         const voicePill = document.getElementById('statusVoice');
@@ -1520,13 +1720,46 @@
         // Nombre del Servidor en el Header
         document.getElementById('headerGuildName').innerText = data.guildName ? ` - ${data.guildName}` : '';
 
-        // Precargar presencia de forma no invasiva (si el usuario no está escribiendo activamente)
-        const presenceInput = document.getElementById('presenceActivity');
-        if (document.activeElement !== presenceInput) {
-          presenceInput.value = data.botActivity || '';
+        // Actualizar clientes activos y sus IPs en el panel
+        const clientsPill = document.getElementById('statusClients');
+        if (clientsPill && data.activePanelClients !== undefined) {
+          clientsPill.innerText = `Panel: ${data.activePanelClients}`;
+          clientsPill.title = `IPs conectadas:\n${data.activePanelIps ? data.activePanelIps.join('\n') : ''}`;
         }
-        document.getElementById('presenceStatus').value = data.botStatus || 'online';
-        document.getElementById('presenceType').value = data.botPresenceType || 'playing';
+
+        // Mostrar / Ocultar información de sesión activa
+        const sessionContainer = document.getElementById('activeSessionInfoContainer');
+        const sessionText = document.getElementById('activeSessionText');
+        if (data.activeSession && sessionContainer && sessionText) {
+          sessionContainer.style.display = 'flex';
+          const end = new Date(data.activeSession.endTime);
+          const endTimeStr = end.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+          sessionText.innerHTML = `
+            Juego: <b>${data.activeSession.gameActivity || 'Charla / General'}</b><br>
+            Duración: <b>${data.activeSession.durationHours} hora(s)</b><br>
+            Finaliza a las: <b>${endTimeStr}</b>
+          `;
+        } else if (sessionContainer) {
+          sessionContainer.style.display = 'none';
+        }
+
+        // Precargar presencia de forma no invasiva (si el usuario no está interactuando con los campos)
+        const presenceInput = document.getElementById('presenceActivity');
+        const presenceStatus = document.getElementById('presenceStatus');
+        const presenceType = document.getElementById('presenceType');
+
+        if (document.activeElement !== presenceInput &&
+            document.activeElement !== presenceStatus &&
+            document.activeElement !== presenceType) {
+          presenceInput.value = data.botActivity || '';
+          presenceStatus.value = data.botStatus || 'online';
+          presenceType.value = data.botPresenceType || 'playing';
+        }
+
+        // Auto-actualizar letras en tiempo real si el usuario está en la pestaña letras
+        if (activeTab === 'letras' && lastTrackData.title && currentLyricsTrack !== `${lastTrackData.title} - ${lastTrackData.artist}`) {
+          loadLyrics();
+        }
 
         // Actualizar estados visuales de botones premium
         document.getElementById('btnShuffle').classList.toggle('active', !!data.isShuffle);
@@ -1794,6 +2027,48 @@
       }
     }
 
+    async function cancelReminder() {
+      try {
+        const res = await fetch('/api/reminder/cancel', {
+          method: 'POST'
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Sesión activa cancelada con éxito');
+          updateState();
+        } else {
+          showToast(`Error: ${data.error || 'No se pudo cancelar'}`);
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error al cancelar la sesión');
+      }
+    }
+
+    async function sendTTS() {
+      const text = document.getElementById('ttsTextInput').value.trim();
+      if (!text) {
+        showToast('Escribe algún texto para hablar');
+        return;
+      }
+      try {
+        const res = await fetch('/api/tts/speak', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        if (res.ok) {
+          showToast('Reproduciendo voz en Discord...');
+          document.getElementById('ttsTextInput').value = '';
+        } else {
+          showToast('El bot no está en un canal de voz.');
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error al conectar con la API de voz');
+      }
+    }
+
     async function updatePresence() {
       const activity = document.getElementById('presenceActivity').value.trim();
       const status = document.getElementById('presenceStatus').value;
@@ -2058,17 +2333,29 @@
         const res = await fetch(`/api/channels/${channelId}/members`);
         const members = await res.json();
         const select = document.getElementById('reminderTarget');
+        const dmSelect = document.getElementById('dmTargetSelect');
         
         select.innerHTML = `
           <option value="@everyone">📢 Mencionar a todos (@everyone)</option>
           <option value="@here">🔔 Mencionar activos (@here)</option>
         `;
         
+        if (dmSelect) {
+          dmSelect.innerHTML = '<option value="">-- Selecciona un miembro del canal --</option>';
+        }
+        
         members.forEach(m => {
           const opt = document.createElement('option');
           opt.value = `<@${m.username}>`;
           opt.innerText = `👤 Mencionar a ${m.displayName}`;
           select.appendChild(opt);
+
+          if (dmSelect && m.id) {
+            const dmOpt = document.createElement('option');
+            dmOpt.value = m.id;
+            dmOpt.innerText = `👤 ${m.displayName} (@${m.username})`;
+            dmSelect.appendChild(dmOpt);
+          }
         });
       } catch (e) {
         console.error(e);
@@ -2127,10 +2414,18 @@
 
           const avatarUrl = msg.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png';
           
+          let stamp = '';
+          if (msg.timestamp) {
+            const d = new Date(msg.timestamp);
+            const timeStr = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+            stamp = `<span style="font-size: 0.65rem; opacity: 0.5; margin-left: 6px; font-weight: normal;">${dateStr} ${timeStr}</span>`;
+          }
+          
           wrapper.innerHTML = `
             <img class="chat-avatar" src="${avatarUrl}" alt="Avatar">
             <div class="chat-bubble">
-              <span class="chat-bubble-author">${isPanel ? 'Panel (Tú)' : msg.author}</span>
+              <span class="chat-bubble-author">${isPanel ? 'Panel (Tú)' : msg.author}${stamp}</span>
               <span class="chat-bubble-content">${cleanContent}</span>
             </div>
           `;
@@ -2354,7 +2649,294 @@
       }
     });
 
+    // Funciones de Conexión de Voz
+    async function loadVoiceChannels() {
+      try {
+        const res = await fetch('/api/voice-channels');
+        const channels = await res.json();
+        const select = document.getElementById('voiceChannelSelect');
+        if (!select) return;
+        
+        select.innerHTML = '<option value="">-- Selecciona un canal de voz --</option>';
+        
+        const guilds = {};
+        channels.forEach(ch => {
+          if (!guilds[ch.guildName]) {
+            guilds[ch.guildName] = [];
+          }
+          guilds[ch.guildName].push(ch);
+        });
+
+        for (const guildName in guilds) {
+          const group = document.createElement('optgroup');
+          group.label = guildName;
+          guilds[guildName].forEach(ch => {
+            const opt = document.createElement('option');
+            opt.value = ch.id;
+            opt.innerText = `🔊 ${ch.name}`;
+            group.appendChild(opt);
+          });
+          select.appendChild(group);
+        }
+      } catch (e) {
+        console.error('Error al cargar canales de voz:', e);
+      }
+    }
+
+    async function connectVoice(action) {
+      const select = document.getElementById('voiceChannelSelect');
+      const channelId = select.value;
+      if (!channelId) {
+        showToast('Selecciona un canal de voz primero');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/voice/connect', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channelId })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast(action === 'mover' ? `Bot movido a: ${data.channelName}` : `Bot conectado a: ${data.channelName}`);
+          updateState();
+        } else {
+          showToast(`Error: ${data.error || 'No se pudo conectar'}`);
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error al conectar al canal de voz');
+      }
+    }
+
+    async function disconnectVoice() {
+      try {
+        const res = await fetch('/api/voice/disconnect', { method: 'POST' });
+        if (res.ok) {
+          showToast('Desconectado del canal de voz');
+          updateState();
+        } else {
+          showToast('Error al desconectar');
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error al desconectar');
+      }
+    }
+
+    // Función de Mensajes Privados (DM)
+    let dmRefreshInterval = null;
+
+    function onDmTargetChanged(userId) {
+      document.getElementById('dmTargetId').value = userId;
+      setupDmRefresh(userId);
+    }
+
+    function onDmTargetIdInput(userId) {
+      setupDmRefresh(userId);
+    }
+
+    function setupDmRefresh(userId) {
+      const container = document.getElementById('dmViewerContainer');
+      if (userId) {
+        container.style.display = 'flex';
+        loadDMs(userId);
+        clearInterval(dmRefreshInterval);
+        dmRefreshInterval = setInterval(() => loadDMs(userId), 3000);
+      } else {
+        container.style.display = 'none';
+        clearInterval(dmRefreshInterval);
+        dmRefreshInterval = null;
+      }
+    }
+
+    async function loadDMs(userId) {
+      if (!userId || activeTab !== 'chat') return;
+      try {
+        const res = await fetch(`/api/dm/${userId}/messages`);
+        const messages = await res.json();
+        const viewer = document.getElementById('dmMessagesViewer');
+        if (!viewer) return;
+
+        if (messages.length === 0) {
+          viewer.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 50px;">No hay mensajes en esta conversación privada</div>';
+          return;
+        }
+
+        viewer.innerHTML = '';
+        messages.forEach(msg => {
+          const wrapper = document.createElement('div');
+          wrapper.className = `chat-bubble-wrapper ${msg.isMe ? 'panel-msg' : ''}`;
+          const avatarUrl = msg.avatar || 'https://cdn.discordapp.com/embed/avatars/0.png';
+
+          let stamp = '';
+          if (msg.timestamp) {
+            const d = new Date(msg.timestamp);
+            const timeStr = d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = d.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' });
+            stamp = `<span style="font-size: 0.65rem; opacity: 0.5; margin-left: 6px; font-weight: normal;">${dateStr} ${timeStr}</span>`;
+          }
+
+          wrapper.innerHTML = `
+            <img class="chat-avatar" src="${avatarUrl}" alt="Avatar">
+            <div class="chat-bubble">
+              <span class="chat-bubble-author">${msg.isMe ? 'Panel (Tú)' : msg.author}${stamp}</span>
+              <span class="chat-bubble-content">${msg.content}</span>
+            </div>
+          `;
+          viewer.appendChild(wrapper);
+        });
+        viewer.scrollTop = viewer.scrollHeight;
+      } catch (e) {
+        console.error('Error al cargar DMs:', e);
+      }
+    }
+
+    async function sendDM() {
+      const userId = document.getElementById('dmTargetId').value.trim();
+      const message = document.getElementById('dmMessageInput').value.trim();
+
+      if (!userId || !message) {
+        showToast('Completa el ID del usuario y el mensaje');
+        return;
+      }
+
+      try {
+        const res = await fetch('/api/message/dm', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId, message })
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Mensaje privado (DM) enviado');
+          document.getElementById('dmMessageInput').value = '';
+          loadDMs(userId);
+        } else {
+          showToast(`Error: ${data.error || 'No se pudo enviar el DM'}`);
+        }
+      } catch (e) {
+        console.error(e);
+        showToast('Error al enviar mensaje privado');
+      }
+    }
+
+    // Función para obtener letras
+    let currentLyricsTrack = '';
+
+    async function loadLyrics(force = false) {
+      if (!lastTrackData || !lastTrackData.title || lastTrackData.title === 'Ninguna canción') {
+        document.getElementById('lyricsSongTitle').innerText = "Ninguna canción en reproducción";
+        document.getElementById('lyricsViewer').innerText = "Inicia la reproducción de una canción en Spotify para cargar su letra.";
+        return;
+      }
+
+      const songKey = `${lastTrackData.title} - ${lastTrackData.artist}`;
+      if (currentLyricsTrack === songKey && !force) {
+        return; 
+      }
+
+      document.getElementById('lyricsSongTitle').innerText = `${lastTrackData.title} (${lastTrackData.artist})`;
+      document.getElementById('lyricsViewer').innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding-top: 150px; width: 100%;">🔍 Buscando letras oficiales en tiempo real...</div>';
+      currentLyricsTrack = songKey;
+
+      try {
+        const res = await fetch(`/api/lyrics?track=${encodeURIComponent(lastTrackData.title)}&artist=${encodeURIComponent(lastTrackData.artist)}`);
+        const data = await res.json();
+        
+        if (data.lyrics) {
+          document.getElementById('lyricsViewer').innerText = data.lyrics;
+          document.getElementById('lyricsViewer').scrollTop = 0;
+        } else {
+          document.getElementById('lyricsViewer').innerHTML = `<div style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding-top: 150px; width: 100%;">❌ No se encontraron letras para:<br>"${lastTrackData.title}" de ${lastTrackData.artist}</div>`;
+        }
+      } catch (err) {
+        document.getElementById('lyricsViewer').innerHTML = '<div style="font-size: 0.85rem; color: var(--text-muted); text-align: center; padding-top: 150px; width: 100%;">❌ Error al conectar con el servidor de letras.</div>';
+      }
+    }
+
+    // Función para obtener canales activos y miembros conectados
+    let activeVoiceInterval = null;
+
+    async function loadActiveVoiceChannels() {
+      if (activeTab !== 'canales') return;
+      try {
+        const res = await fetch('/api/voice-channels-active');
+        const guilds = await res.json();
+        const container = document.getElementById('activeVoiceChannelsContainer');
+        if (!container) return;
+
+        if (guilds.length === 0) {
+          container.innerHTML = '<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; padding-top: 100px;">El bot no está en ningún servidor</div>';
+          return;
+        }
+
+        container.innerHTML = '';
+        guilds.forEach(guild => {
+          const gBox = document.createElement('div');
+          gBox.className = 'discord-guild-box';
+
+          const gTitle = document.createElement('div');
+          gTitle.className = 'discord-guild-title';
+          gTitle.innerText = `🏠 ${guild.name}`;
+          gBox.appendChild(gTitle);
+
+          guild.channels.forEach(channel => {
+            const chRow = document.createElement('div');
+            chRow.className = 'discord-channel-row';
+
+            const activeClass = channel.isBotConnected ? 'active-channel' : '';
+            chRow.innerHTML = `
+              <div class="discord-channel-name ${activeClass}">🔊 ${channel.name} ${channel.isBotConnected ? '<span style="font-size:0.65rem; background:rgba(29,185,84,0.2); padding:1px 4px; border-radius:3px; font-weight:bold;">BOT AQUÍ</span>' : ''}</div>
+            `;
+
+            const mList = document.createElement('div');
+            mList.className = 'discord-members-list';
+
+            if (channel.members.length === 0) {
+              mList.innerHTML = '<div style="font-size: 0.75rem; color: var(--text-muted); font-style: italic; margin-left: 6px;">Canal vacío</div>';
+            } else {
+              channel.members.forEach(member => {
+                const mDiv = document.createElement('div');
+                mDiv.className = 'discord-member-item';
+                
+                let badges = '';
+                if (member.isBot) {
+                  badges += `<span class="discord-member-badge">BOT</span>`;
+                }
+
+                let muteIcons = '';
+                if (member.isMuted) {
+                  muteIcons += '🎙️❌';
+                }
+                if (member.isDeaf) {
+                  muteIcons += '🎧❌';
+                }
+
+                mDiv.innerHTML = `
+                  <img class="discord-member-avatar" src="${member.avatar}" alt="Avatar">
+                  <span class="discord-member-name" style="${member.isBot ? 'color: var(--primary); font-weight: bold;' : ''}">${member.displayName}</span>
+                  ${badges}
+                  <span class="discord-member-status-icon">${muteIcons}</span>
+                `;
+                mList.appendChild(mDiv);
+              });
+            }
+
+            chRow.appendChild(mList);
+            gBox.appendChild(chRow);
+          });
+
+          container.appendChild(gBox);
+        });
+      } catch (err) {
+        console.error('Error al cargar canales de voz activos:', err);
+      }
+    }
+
     // Bucles principales
+    loadVoiceChannels();
     updateState();
     setInterval(updateState, 2000);
     setInterval(loadLogs, 3000);
